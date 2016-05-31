@@ -318,12 +318,13 @@ public:
 class ThreadConfiguration
 {
 public:
-    ThreadConfiguration(bool enableExperimentalFeatures)
+    ThreadConfiguration(bool enableExperimentalFeatures, bool enableSimdjsFeature)
     {
         CopyGlobalFlags();
         if (enableExperimentalFeatures)
         {
             EnableExperimentalFeatures();
+            m_Simdjs = enableSimdjsFeature;
         }
     }
 
@@ -1025,7 +1026,7 @@ public:
     ArenaAllocator* GetThreadAlloc() { return &threadAlloc; }
     static CriticalSection * GetCriticalSection() { return &s_csThreadContext; }
 
-    ThreadContext(AllocationPolicyManager * allocationPolicyManager = nullptr, JsUtil::ThreadService::ThreadServiceCallback threadServiceCallback = nullptr, bool enableExperimentalFeatures = false);
+    ThreadContext(AllocationPolicyManager * allocationPolicyManager = nullptr, JsUtil::ThreadService::ThreadServiceCallback threadServiceCallback = nullptr, bool enableExperimentalFeatures = false, bool enableSimdjsFeature = false);
     static void Add(ThreadContext *threadContext);
 
     ThreadConfiguration const * GetConfig() const { return &configuration; }

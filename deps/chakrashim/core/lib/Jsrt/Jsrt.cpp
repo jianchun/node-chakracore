@@ -84,7 +84,8 @@ CHAKRA_API JsCreateRuntime(_In_ JsRuntimeAttributes attributes, _In_opt_ JsThrea
             JsRuntimeAttributeDisableEval |
             JsRuntimeAttributeDisableNativeCodeGeneration |
             JsRuntimeAttributeEnableExperimentalFeatures |
-            JsRuntimeAttributeDispatchSetExceptionsToDebugger
+            JsRuntimeAttributeDispatchSetExceptionsToDebugger |
+            JsRuntimeAttributeEnableSimdjsFeature
 #ifdef ENABLE_DEBUG_CONFIG_OPTIONS
             | JsRuntimeAttributeSerializeLibraryByteCode
 #endif
@@ -98,7 +99,8 @@ CHAKRA_API JsCreateRuntime(_In_ JsRuntimeAttributes attributes, _In_opt_ JsThrea
 
         AllocationPolicyManager * policyManager = HeapNew(AllocationPolicyManager, (attributes & JsRuntimeAttributeDisableBackgroundWork) == 0);
         bool enableExperimentalFeatures = (attributes & JsRuntimeAttributeEnableExperimentalFeatures) != 0;
-        ThreadContext * threadContext = HeapNew(ThreadContext, policyManager, threadService, enableExperimentalFeatures);
+        bool enableSimdjsFeature = (attributes & JsRuntimeAttributeEnableSimdjsFeature) != 0;
+        ThreadContext * threadContext = HeapNew(ThreadContext, policyManager, threadService, enableExperimentalFeatures, enableSimdjsFeature);
 
         if (((attributes & JsRuntimeAttributeDisableBackgroundWork) != 0)
 #ifdef ENABLE_DEBUG_CONFIG_OPTIONS

@@ -14,6 +14,8 @@ namespace Js
     typedef JsUtil::List<ReturnedValue*> ReturnedValueList;
 }
 
+using namespace PlatformAgnostic;
+
 struct IAuthorFileContext;
 
 class HostScriptContext;
@@ -49,12 +51,14 @@ public:
 
 class ThreadContext;
 
-class InterruptPoller abstract
+class InterruptPoller _ABSTRACT
 {
     // Interface with a polling object located in the hosting layer.
 
 public:
     InterruptPoller(ThreadContext *tc);
+
+    virtual ~InterruptPoller() { }
 
     void CheckInterruptPoll();
     void GetStatementCount(ULONG *pluHi, ULONG *pluLo);
@@ -253,6 +257,8 @@ public:
     ~AutoTagNativeLibraryEntry();
 };
 
+#ifdef ENABLE_BASIC_TELEMETRY
+#if ENABLE_NATIVE_CODEGEN
 struct JITStats
 {
     uint lessThan5ms;
@@ -263,6 +269,7 @@ struct JITStats
     uint within100And300ms;
     uint greaterThan300ms;
 };
+#endif
 
 struct ParserStats
 {
@@ -279,7 +286,7 @@ struct ParserStats
 class ParserTimer
 {
 private:
-    Js::HiResTimer timer;
+    DateTime::HiResTimer timer;
     ParserStats stats;
 public:
     ParserTimer();
@@ -289,11 +296,11 @@ public:
     void LogTime(double ms);
 };
 
-
+#if ENABLE_NATIVE_CODEGEN
 class JITTimer
 {
 private:
-    Js::HiResTimer timer;
+    DateTime::HiResTimer timer;
     JITStats stats;
 public:
     JITTimer();
@@ -302,6 +309,8 @@ public:
     double Now();
     void LogTime(double ms);
 };
+#endif
+#endif
 
 #define AUTO_TAG_NATIVE_LIBRARY_ENTRY(function, callInfo, name) \
     AutoTagNativeLibraryEntry __tag(function, callInfo, name, _AddressOfReturnAddress())
@@ -309,13 +318,12 @@ public:
 class ThreadConfiguration
 {
 public:
-    ThreadConfiguration(bool enableExperimentalFeatures, bool enableSimdjsFeature)
+    ThreadConfiguration(bool enableExperimentalFeatures)
     {
         CopyGlobalFlags();
         if (enableExperimentalFeatures)
         {
             EnableExperimentalFeatures();
-            m_Simdjs = enableSimdjsFeature;
         }
     }
 
@@ -434,7 +442,7 @@ public:
     }
 #endif
 
-#if ENABLE_NATIVE_CODEGEN
+#if ENABLE_NATIVE_CODEGEN && defined(ENABLE_SIMDJS)
     // used by inliner. Maps Simd FuncInfo (library func) to equivalent opcode.
     typedef JsUtil::BaseDictionary<Js::FunctionInfo *, Js::OpCode, ArenaAllocator> FuncInfoToOpcodeMap;
     FuncInfoToOpcodeMap * simdFuncInfoToOpcodeMap;
@@ -459,7 +467,6 @@ public:
     _x86_SIMDValue X86_TEMP_SIMD[SIMD_TEMP_SIZE];
     _x86_SIMDValue * GetSimdTempArea() { return X86_TEMP_SIMD; }
 #endif
-
 #endif
 
 private:
@@ -614,8 +621,10 @@ private:
     JsUtil::ThreadService threadService;
     uint callRootLevel;
 
+#if ENABLE_BACKGROUND_PAGE_FREEING
     // The thread page allocator is used by the recycler and need the background page queue
     PageAllocator::BackgroundPageQueue backgroundPageQueue;
+#endif
     IdleDecommitPageAllocator pageAllocator;
     Recycler* recycler;
 
@@ -681,7 +690,7 @@ private:
     size_t nativeCodeSize;
     size_t sourceCodeSize;
 
-    Js::HiResTimer hTimer;
+    DateTime::HiResTimer hTimer;
 
     int stackProbeCount;
     // Count stack probes and poll for continuation every n probes
@@ -725,6 +734,7 @@ private:
     // If all try/catch blocks in the current stack marked as non-user code then this member will remain false.
     bool hasCatchHandlerToUserCode;
 
+#ifdef ENABLE_GLOBALIZATION
     Js::DelayLoadWinRtString delayLoadWinRtString;
 #ifdef ENABLE_PROJECTION
     Js::DelayLoadWinRtError delayLoadWinRtError;
@@ -743,11 +753,12 @@ private:
     Js::DelayLoadWinCoreMemory delayLoadWinCoreMemoryLibrary;
 #endif
     Js::DelayLoadWinCoreProcessThreads delayLoadWinCoreProcessThreads;
+#endif
 
     // Number of script context attached with probe manager.
     // This counter will be used as addref when the script context is created, this way we maintain the life of diagnostic object.
     // Once no script context available , diagnostic will go away.
-    long crefSContextForDiag;
+    LONG crefSContextForDiag;
 
     Entropy entropy;
 
@@ -821,6 +832,7 @@ public:
 
     UCrtC99MathApis* GetUCrtC99MathApis() { return &ucrtC99MathApis; }
 
+#ifdef ENABLE_GLOBALIZATION
     Js::DelayLoadWinRtString *GetWinRTStringLibrary();
 #ifdef ENABLE_PROJECTION
     Js::DelayLoadWinRtError *GetWinRTErrorLibrary();
@@ -839,10 +851,15 @@ public:
     Js::DelayLoadWinCoreMemory * GetWinCoreMemoryLibrary();
 #endif
     Js::DelayLoadWinCoreProcessThreads * GetWinCoreProcessThreads();
+#endif
 
+#ifdef ENABLE_BASIC_TELEMETRY
+#if ENABLE_NATIVE_CODEGEN
     JITTimer JITTelemetry;
+#endif
     ParserTimer ParserTelemetry;
     GUID activityId;
+#endif
     void *tridentLoadAddress;
 
     void* GetTridentLoadAddress() const { return tridentLoadAddress;  }
@@ -852,6 +869,8 @@ public:
     DirectCallTelemetry directCallTelemetry;
 #endif
 
+#ifdef ENABLE_BASIC_TELEMETRY
+#if ENABLE_NATIVE_CODEGEN
     JITStats GetJITStats()
     {
         return JITTelemetry.GetStats();
@@ -861,7 +880,8 @@ public:
     {
         JITTelemetry.Reset();
     }
-
+#endif
+    
     ParserStats GetParserStats()
     {
         return ParserTelemetry.GetStats();
@@ -871,7 +891,7 @@ public:
     {
         ParserTelemetry.Reset();
     }
-
+#endif
 
     double maxGlobalFunctionExecTime;
     double GetAndResetMaxGlobalFunctionExecTime()
@@ -1001,11 +1021,11 @@ public:
 
 
 
-    Js::HiResTimer * GetHiResTimer() { return &hTimer; }
+    DateTime::HiResTimer * GetHiResTimer() { return &hTimer; }
     ArenaAllocator* GetThreadAlloc() { return &threadAlloc; }
     static CriticalSection * GetCriticalSection() { return &s_csThreadContext; }
 
-    ThreadContext(AllocationPolicyManager * allocationPolicyManager = nullptr, JsUtil::ThreadService::ThreadServiceCallback threadServiceCallback = nullptr, bool enableExperimentalFeatures = false, bool enableSimdjsFeature = false);
+    ThreadContext(AllocationPolicyManager * allocationPolicyManager = nullptr, JsUtil::ThreadService::ThreadServiceCallback threadServiceCallback = nullptr, bool enableExperimentalFeatures = false);
     static void Add(ThreadContext *threadContext);
 
     ThreadConfiguration const * GetConfig() const { return &configuration; }
@@ -1300,8 +1320,8 @@ public:
     }
 
     static BOOLEAN IsOnStack(void const *ptr);
-    __declspec(noinline) bool IsStackAvailable(size_t size);
-    __declspec(noinline) bool IsStackAvailableNoThrow(size_t size = Js::Constants::MinStackDefault);
+    _NOINLINE bool IsStackAvailable(size_t size);
+    _NOINLINE bool IsStackAvailableNoThrow(size_t size = Js::Constants::MinStackDefault);
     static bool IsCurrentStackAvailable(size_t size);
     void ProbeStackNoDispose(size_t size, Js::ScriptContext *scriptContext, PVOID returnAddress = nullptr);
     void ProbeStack(size_t size, Js::ScriptContext *scriptContext, PVOID returnAddress = nullptr);
@@ -1373,11 +1393,13 @@ public:
         this->recyclableData->propagateException = propagateToDebugger;
     }
 
+#ifdef ENABLE_CUSTOM_ENTROPY
     Entropy& GetEntropy()
     {
         return entropy;
     }
-
+#endif
+    
     Js::ImplicitCallFlags * GetAddressOfImplicitCallFlags()
     {
         return &implicitCallFlags;
@@ -1411,7 +1433,7 @@ public:
     void CheckAndResetImplicitCallAccessorFlag();
 
     template <class Fn>
-    __inline Js::Var ExecuteImplicitCall(Js::RecyclableObject * function, Js::ImplicitCallFlags flags, Fn implicitCall)
+    inline Js::Var ExecuteImplicitCall(Js::RecyclableObject * function, Js::ImplicitCallFlags flags, Fn implicitCall)
     {
         // For now, we will not allow Function that is marked as HasNoSideEffect to be called, and we will just bailout.
         // These function may still throw exceptions, so we will need to add checks with RecordImplicitException

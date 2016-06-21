@@ -498,6 +498,7 @@ namespace Js
             bool disableSwitchOpt : 1;
             bool disableEquivalentObjTypeSpec : 1;
             bool disableObjTypeSpec_jitLoopBody : 1;
+            bool disablePowIntIntTypeSpec : 1;
             bool disableLoopImplicitCallInfo : 1;
         } bits;
 
@@ -534,12 +535,14 @@ namespace Js
         static CriticalSection s_csOutput;
         template <typename T>
         static void WriteData(T data, FILE * file);
+#if defined(_MSC_VER) && !defined(__clang__)
         template <>
         static void WriteData<char16 const *>(char16 const * sz, FILE * file);
         template <>
         static void WriteData<FunctionInfo *>(FunctionInfo * functionInfo, FILE * file); // Not defined, to prevent accidentally writing function info
         template <>
         static void WriteData<FunctionBody *>(FunctionBody * functionInfo, FILE * file);
+#endif
         template <typename T>
         static void WriteArray(uint count, T * arr, FILE * file);
 #endif
@@ -782,6 +785,8 @@ namespace Js
         void DisableEquivalentObjTypeSpec() { this->bits.disableEquivalentObjTypeSpec = true; }
         bool IsObjTypeSpecDisabledInJitLoopBody() const { return this->bits.disableObjTypeSpec_jitLoopBody; }
         void DisableObjTypeSpecInJitLoopBody() { this->bits.disableObjTypeSpec_jitLoopBody = true; }
+        bool IsPowIntIntTypeSpecDisabled() const { return bits.disablePowIntIntTypeSpec; }
+        void DisablePowIntIntTypeSpec() { this->bits.disablePowIntIntTypeSpec = true; }
 
         static bool IsCallSiteNoInfo(Js::LocalFunctionId functionId) { return functionId == CallSiteNoInfo; }
         int IncRejitCount() { return this->rejitCount++; }

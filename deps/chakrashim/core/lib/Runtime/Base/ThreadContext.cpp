@@ -57,7 +57,7 @@ void (*InitializeAdditionalProperties)(ThreadContext *threadContext) = DefaultIn
 // To make sure the marker function doesn't get inlined, optimized away, or merged with other functions we disable optimization.
 // If this method ends up causing a perf problem in the future, we should replace it with asm versions which should be lighter.
 #pragma optimize("g", off)
-__declspec(noinline) extern "C" void* MarkerForExternalDebugStep()
+_NOINLINE extern "C" void* MarkerForExternalDebugStep()
 {
     // We need to return something here to prevent this function from being merged with other empty functions by the linker.
     static int __dummy;
@@ -69,7 +69,7 @@ CriticalSection ThreadContext::s_csThreadContext;
 size_t ThreadContext::processNativeCodeSize = 0;
 ThreadContext * ThreadContext::globalListFirst = nullptr;
 ThreadContext * ThreadContext::globalListLast = nullptr;
-uint ThreadContext::activeScriptSiteCount = 0;
+__declspec(thread) uint ThreadContext::activeScriptSiteCount = 0;
 
 const Js::PropertyRecord * const ThreadContext::builtInPropertyRecords[] =
 {
@@ -99,7 +99,7 @@ ThreadContext::RecyclableData::RecyclableData(Recycler *const recycler) :
 #define ALLOC_XDATA (false)
 #endif
 
-ThreadContext::ThreadContext(AllocationPolicyManager * allocationPolicyManager, JsUtil::ThreadService::ThreadServiceCallback threadServiceCallback, bool enableExperimentalFeatures, bool enableSimdjsFeature) :
+ThreadContext::ThreadContext(AllocationPolicyManager * allocationPolicyManager, JsUtil::ThreadService::ThreadServiceCallback threadServiceCallback, bool enableExperimentalFeatures) :
     currentThreadId(::GetCurrentThreadId()),
     stackLimitForCurrentThread(0),
     stackProber(nullptr),
@@ -114,7 +114,11 @@ ThreadContext::ThreadContext(AllocationPolicyManager * allocationPolicyManager, 
     isOptimizedForManyInstances(Js::Configuration::Global.flags.OptimizeForManyInstances),
     bgJit(Js::Configuration::Global.flags.BgJit),
     pageAllocator(allocationPolicyManager, PageAllocatorType_Thread, Js::Configuration::Global.flags, 0, PageAllocator::DefaultMaxFreePageCount,
-        false, &backgroundPageQueue),
+        false
+#if ENABLE_BACKGROUND_PAGE_FREEING
+        , &backgroundPageQueue
+#endif
+        ),
     recycler(nullptr),
     hasCollectionCallBack(false),
     callDispose(true),
@@ -176,7 +180,7 @@ ThreadContext::ThreadContext(AllocationPolicyManager * allocationPolicyManager, 
     dynamicObjectEnumeratorCacheMap(&HeapAllocator::Instance, 16),
     //threadContextFlags(ThreadContextFlagNoFlag),
     telemetryBlock(&localTelemetryBlock),
-    configuration(enableExperimentalFeatures, enableSimdjsFeature),
+    configuration(enableExperimentalFeatures),
     jsrtRuntime(nullptr),
     rootPendingClose(nullptr),
     wellKnownHostTypeHTMLAllCollectionTypeId(Js::TypeIds_Undefined),
@@ -184,7 +188,6 @@ ThreadContext::ThreadContext(AllocationPolicyManager * allocationPolicyManager, 
     loopDepth(0),
     maxGlobalFunctionExecTime(0.0),
     isAllJITCodeInPreReservedRegion(true),
-    activityId(GUID_NULL),
     tridentLoadAddress(nullptr),
     debugManager(nullptr)
 #ifdef ENABLE_DIRECTCALL_TELEMETRY
@@ -200,14 +203,15 @@ ThreadContext::ThreadContext(AllocationPolicyManager * allocationPolicyManager, 
 
     isScriptActive = false;
 
+#ifdef ENABLE_CUSTOM_ENTROPY
     entropy.Initialize();
-
+#endif
+    
 #if ENABLE_NATIVE_CODEGEN
     this->bailOutRegisterSaveSpace = AnewArrayZ(this->GetThreadAlloc(), Js::Var, GetBailOutRegisterSaveSlotCount());
 #endif
 
-    // SIMD_JS
-#if ENABLE_NATIVE_CODEGEN
+#if defined(ENABLE_SIMDJS) && ENABLE_NATIVE_CODEGEN
     simdFuncInfoToOpcodeMap = Anew(this->GetThreadAlloc(), FuncInfoToOpcodeMap, this->GetThreadAlloc());
     simdOpcodeToSignatureMap = AnewArrayZ(this->GetThreadAlloc(), SimdFuncSignature, Js::Simd128OpcodeCount());
     {
@@ -218,7 +222,7 @@ ThreadContext::ThreadContext(AllocationPolicyManager * allocationPolicyManager, 
 
 #include "ByteCode/OpCodesSimd.h"
     }
-#endif
+#endif // defined(ENABLE_SIMDJS) && ENABLE_NATIVE_CODEGEN
 
 #if DBG_DUMP
     scriptSiteCount = 0;
@@ -548,7 +552,7 @@ void ThreadContext::ValidateThreadContext()
 #endif
 }
 
-#if ENABLE_NATIVE_CODEGEN
+#if ENABLE_NATIVE_CODEGEN && defined(ENABLE_SIMDJS)
 void ThreadContext::AddSimdFuncToMaps(Js::OpCode op, ...)
 {
     Assert(simdFuncInfoToOpcodeMap != nullptr);
@@ -577,7 +581,7 @@ void ThreadContext::AddSimdFuncToMaps(Js::OpCode op, ...)
         simdFuncSignature.args[iArg] = va_arg(arguments, ValueType);
     }
 
-    simdOpcodeToSignatureMap[Js::SimdOpcodeAsIndex(op)] = simdFuncSignature;
+    simdOpcodeToSignatureMap[Js::SIMDUtils::SimdOpcodeAsIndex(op)] = simdFuncSignature;
 
     va_end(arguments);
 }
@@ -626,8 +630,7 @@ Js::OpCode ThreadContext::GetSimdOpcodeFromFuncInfo(Js::FunctionInfo * funcInfo)
 void ThreadContext::GetSimdFuncSignatureFromOpcode(Js::OpCode op, SimdFuncSignature &funcSignature)
 {
     Assert(simdOpcodeToSignatureMap != nullptr);
-    funcSignature = simdOpcodeToSignatureMap[SimdOpcodeAsIndex(op)];
-
+    funcSignature = simdOpcodeToSignatureMap[Js::SIMDUtils::SimdOpcodeAsIndex(op)];
 }
 #endif
 
@@ -1413,10 +1416,9 @@ ThreadContext::SetForceOneIdleCollection()
 BOOLEAN
 ThreadContext::IsOnStack(void const *ptr)
 {
-
-#if defined(_M_IX86)
+#if defined(_M_IX86) && defined(_MSC_VER)
     return ptr < (void*)__readfsdword(0x4) && ptr >= (void*)__readfsdword(0xE0C);
-#elif defined(_M_AMD64)
+#elif defined(_M_AMD64) && defined(_MSC_VER)
     return ptr < (void*)__readgsqword(0x8) && ptr >= (void*)__readgsqword(0x1478);
 #elif defined(_M_ARM)
     ULONG lowLimit, highLimit;
@@ -1428,6 +1430,8 @@ ThreadContext::IsOnStack(void const *ptr)
     ::GetCurrentThreadStackLimits(&lowLimit, &highLimit);
     bool isOnStack = (void*)lowLimit <= ptr && ptr < (void*)highLimit;
     return isOnStack;
+#elif !defined(_MSC_VER)
+    return ::IsAddressOnStack((ULONG_PTR) ptr);
 #else
     AssertMsg(FALSE, "IsOnStack -- not implemented yet case");
     Js::Throw::NotImplemented();
@@ -1451,7 +1455,7 @@ ThreadContext::SetStackLimitForCurrentThread(PBYTE limit)
     this->stackLimitForCurrentThread = limit;
 }
 
-__declspec(noinline) //Win8 947081: might use wrong _AddressOfReturnAddress() if this and caller are inlined
+_NOINLINE //Win8 947081: might use wrong _AddressOfReturnAddress() if this and caller are inlined
 bool
 ThreadContext::IsStackAvailable(size_t size)
 {
@@ -1487,7 +1491,7 @@ ThreadContext::IsStackAvailable(size_t size)
     return false;
 }
 
-__declspec(noinline) //Win8 947081: might use wrong _AddressOfReturnAddress() if this and caller are inlined
+_NOINLINE //Win8 947081: might use wrong _AddressOfReturnAddress() if this and caller are inlined
 bool
 ThreadContext::IsStackAvailableNoThrow(size_t size)
 {
@@ -1564,8 +1568,8 @@ void
 ThreadContext::ProbeStack(size_t size, Js::RecyclableObject * obj, Js::ScriptContext *scriptContext)
 {
     AssertCanHandleStackOverflowCall(obj->IsExternal() ||
-        Js::JavascriptOperators::GetTypeId(obj) == Js::TypeIds_Function &&
-        Js::JavascriptFunction::FromVar(obj)->IsExternalFunction());
+        (Js::JavascriptOperators::GetTypeId(obj) == Js::TypeIds_Function &&
+        Js::JavascriptFunction::FromVar(obj)->IsExternalFunction()));
     if (!this->IsStackAvailable(size))
     {
         if (this->IsExecutionDisabled())
@@ -1576,8 +1580,8 @@ ThreadContext::ProbeStack(size_t size, Js::RecyclableObject * obj, Js::ScriptCon
         }
 
         if (obj->IsExternal() ||
-            Js::JavascriptOperators::GetTypeId(obj) == Js::TypeIds_Function &&
-            Js::JavascriptFunction::FromVar(obj)->IsExternalFunction())
+            (Js::JavascriptOperators::GetTypeId(obj) == Js::TypeIds_Function &&
+            Js::JavascriptFunction::FromVar(obj)->IsExternalFunction()))
         {
             Js::JavascriptError::ThrowStackOverflowError(scriptContext);
         }
@@ -1965,7 +1969,7 @@ void ThreadContext::ReleaseDebugManager()
     Assert(crefSContextForDiag > 0);
     Assert(this->debugManager != nullptr);
 
-    long lref = InterlockedDecrement(&crefSContextForDiag);
+    LONG lref = InterlockedDecrement(&crefSContextForDiag);
 
     if (lref == 0)
     {
@@ -3468,7 +3472,7 @@ BOOL ThreadContext::IsNativeAddress(void * pCodeAddr)
     {
         return TRUE;
     }
-    
+
     if (!this->IsAllJITCodeInPreReservedRegion())
     {
         CustomHeap::CodePageAllocators::AutoLock autoLock(&this->codePageAllocators);
@@ -3674,7 +3678,14 @@ ThreadServiceWrapper* ThreadContext::GetThreadServiceWrapper()
 
 uint ThreadContext::GetRandomNumber()
 {
+#ifdef ENABLE_CUSTOM_ENTROPY
     return (uint)GetEntropy().GetRand();
+#else
+    uint randomNumber = 0;
+    errno_t e = rand_s(&randomNumber);
+    Assert(e == 0);
+    return randomNumber;
+#endif
 }
 
 #ifdef ENABLE_JS_ETW
@@ -3896,6 +3907,7 @@ void ThreadContext::ClearThreadContextFlag(ThreadContextFlags contextFlag)
     this->threadContextFlags = (ThreadContextFlags)(this->threadContextFlags & ~contextFlag);
 }
 
+#ifdef ENABLE_GLOBALIZATION
 #ifdef _CONTROL_FLOW_GUARD
 Js::DelayLoadWinCoreMemory * ThreadContext::GetWinCoreMemoryLibrary()
 {
@@ -3967,6 +3979,7 @@ Js::DelayLoadWinRtFoundation* ThreadContext::GetWinRtFoundationLibrary()
     return &delayLoadWinRtFoundationLibrary;
 }
 #endif
+#endif // ENABLE_GLOBALIZATION
 
 bool ThreadContext::IsCFGEnabled()
 {
@@ -4119,6 +4132,8 @@ ThreadContext::ClearRootTrackerScriptContext(Js::ScriptContext * scriptContext)
 }
 #endif
 
+#ifdef ENABLE_BASIC_TELEMETRY
+#if ENABLE_NATIVE_CODEGEN
 JITTimer::JITTimer()
 {
     Reset();
@@ -4170,6 +4185,7 @@ void JITTimer::LogTime(double ms)
         stats.greaterThan300ms++;
     }
 }
+#endif // NATIVE_CODE_GEN
 
 ParserTimer::ParserTimer()
 {
@@ -4226,6 +4242,7 @@ void ParserTimer::LogTime(double ms)
         stats.greaterThan300ms++;
     }
 }
+#endif // ENABLE_BASIC_TELEMETRY
 
 AutoTagNativeLibraryEntry::AutoTagNativeLibraryEntry(Js::RecyclableObject* function, Js::CallInfo callInfo, PCWSTR name, void* addr)
 {

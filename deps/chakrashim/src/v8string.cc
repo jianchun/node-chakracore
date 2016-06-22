@@ -70,34 +70,28 @@ int String::Length() const {
 }
 
 int String::Utf8Length() const {
-  const wchar_t* str;
+  const char* str;
   size_t stringLength;
-  if (JsStringToPointer((JsValueRef)this, &str, &stringLength) != JsNoError) {
+  if (JsStringToPointerUtf8((JsValueRef)this,
+                            &str, &stringLength) != JsNoError) {
     // error
     return 0;
   }
 
-  size_t utf8Length;
-  auto result =
-    jsrt::StringConvert::UTF8CharLength(str, stringLength, &utf8Length);
-  if (result != JsNoError) {
-    return 0;
-  }
-
-  return static_cast<int>(utf8Length);
+  return static_cast<int>(stringLength);
 }
 
 template <class CharType>
 static int WriteRaw(
     JsValueRef ref, CharType* buffer, int start, int length, int options) {
-  const wchar_t* str;
+  const char* str;
   if (length == 0) {
     // bail out if we are required to write no chars
     return 0;
   }
 
   size_t stringLength;
-  if (JsStringToPointer(ref, &str, &stringLength) != JsNoError) {
+  if (JsStringToPointerUtf8(ref, &str, &stringLength) != JsNoError) {
     // error
     return 0;
   }
@@ -137,44 +131,34 @@ static int WriteRaw(
 
 int String::Write(uint16_t *buffer, int start, int length, int options) const {
   return WriteRaw(
-    (JsValueRef)this,
-    reinterpret_cast<wchar_t*>(buffer),
-    start,
-    length,
-    options);
+    (JsValueRef)this, buffer, start, length, options);
 }
 
 int String::WriteOneByte(
     uint8_t* buffer, int start, int length, int options) const {
   return WriteRaw(
-    (JsValueRef)this, reinterpret_cast<char*>(buffer), start, length, options);
+    (JsValueRef)this, buffer, start, length, options);
 }
 
 int String::WriteUtf8(
     char *buffer, int length, int *nchars_ref, int options) const {
+  if (nchars_ref) {
+    *nchars_ref = 0;
+  }
+
   if (length == 0) {
     // bail out if we are required to write no chars
     return 0;
   }
 
-  const wchar_t* str;
+  const char* str;
   size_t stringLength;
-  if (JsStringToPointer((JsValueRef)this, &str, &stringLength) != JsNoError) {
+  if (JsStringToPointerUtf8((JsValueRef)this,
+                            &str, &stringLength) != JsNoError) {
     // error
     return 0;
   }
 
-  if (stringLength == 0) {
-    // bail out if string is empty
-
-    if (!(options & String::NO_NULL_TERMINATION)) {
-      buffer[0] = '\0';
-    }
-
-    return 0;
-  }
-
-  int originalLength = length;
   if (length < 0) {
     // in case length was not provided we want to copy the whole string
     length = static_cast<int>(stringLength);
@@ -182,32 +166,22 @@ int String::WriteUtf8(
   unsigned int count = length < static_cast<int>(stringLength) ?
     length : static_cast<unsigned int>(stringLength);
 
-  size_t charsCount = 0;
-  size_t size = 0;
-  // we pass -1 as the buffer size to imply that the buffer is big enough
-  JsErrorCode convertResult = jsrt::StringConvert::ToUTF8Char(
-    str, count, buffer, originalLength, &size, &charsCount);
-
-  if (convertResult != JsNoError) {
-    return 0;
-  }
+  // CHAKRA-TODO: this is incorrect when truncating
+  memmove(buffer, str, count);
 
   if (!(options & String::NO_NULL_TERMINATION)) {
-    buffer[size++] = '\0';
-    count++;
-    // CHAKRA-TODO: @saary - should we increase this?
-    // charsCount++;
+    buffer[count++] = '\0';
   }
 
   if (nchars_ref != nullptr) {
-    *nchars_ref = static_cast<int>(charsCount);
+    *nchars_ref = static_cast<int>(count);
   }
 
-  return static_cast<int>(size);
+  return static_cast<int>(count);
 }
 
 Local<String> String::Empty(Isolate* isolate) {
-  return FromMaybe(String::New(L"", 0));
+  return FromMaybe(Utils::NewString("", 0));
 }
 
 String* String::Cast(v8::Value *obj) {
@@ -215,33 +189,44 @@ String* String::Cast(v8::Value *obj) {
   return static_cast<String*>(obj);
 }
 
-template <class ToWide>
-MaybeLocal<String> String::New(const ToWide& toWide,
-                               const char *data, int length) {
+static size_t WideStrLen(const uint16_t *p)
+{
+  size_t len = 0;
+  while (*p++) {
+    len++;
+  }
+  return len;
+}
+
+template <class ToNarrow>
+MaybeLocal<String> NewFromWide(const ToNarrow& toNarrow,
+                               const uint16_t *data, int length) {
+  if (length < 0) {
+    length = static_cast<int>(WideStrLen(data));
+  }
+
+  if (length <= 0) {
+    return String::Empty(nullptr);
+  }
+
+  // xplat-todo: Implement correct utf16 -> utf8 conversion. Below is wrong,
+  // just to make simple cases working.
+  unique_ptr<char[]> str(new char[length]);
+  size_t charsWritten;
+  if (toNarrow(data, length, str.get(), length, &charsWritten) != JsNoError) {
+    return Local<String>();
+  }
+
+  return Utils::NewString(str.get(), static_cast<int>(charsWritten));
+}
+
+MaybeLocal<String> Utils::NewString(const char *data, int length) {
   if (length < 0) {
     length = static_cast<int>(strlen(data));
   }
 
-  if (length == 0) {
-    return Empty(nullptr);
-  }
-
-  unique_ptr<wchar_t[]> str(new wchar_t[length]);
-  size_t charsWritten;
-  if (toWide(data, length, str.get(), length, &charsWritten) != JsNoError) {
-    return Local<String>();
-  }
-
-  return New(str.get(), static_cast<int>(charsWritten));
-}
-
-MaybeLocal<String> String::New(const wchar_t *data, int length) {
-  if (length < 0) {
-    length = static_cast<int>(wcslen(data));
-  }
-
   JsValueRef strRef;
-  if (JsPointerToString(data, length, &strRef) != JsNoError) {
+  if (JsPointerToStringUtf8(data, length, &strRef) != JsNoError) {
     return Local<String>();
   }
 
@@ -252,7 +237,7 @@ MaybeLocal<String> String::NewFromUtf8(Isolate* isolate,
                                        const char* data,
                                        v8::NewStringType type,
                                        int length) {
-  return New(jsrt::StringConvert::ToWChar, data, length);
+  return Utils::NewString(data, length);
 }
 
 Local<String> String::NewFromUtf8(Isolate* isolate,
@@ -267,9 +252,7 @@ MaybeLocal<String> String::NewFromOneByte(Isolate* isolate,
                                           const uint8_t* data,
                                           v8::NewStringType type,
                                           int length) {
-  return New(jsrt::StringConvert::CopyRaw<char, wchar_t>,
-             reinterpret_cast<const char*>(data),
-             length);
+  return Utils::NewString(reinterpret_cast<const char*>(data), length);
 }
 
 Local<String> String::NewFromOneByte(Isolate* isolate,
@@ -285,7 +268,9 @@ MaybeLocal<String> String::NewFromTwoByte(Isolate* isolate,
                                           const uint16_t* data,
                                           v8::NewStringType type,
                                           int length) {
-  return New(reinterpret_cast<const wchar_t*>(data), length);
+  // xplat-todo: Implement correct utf16 -> utf8 conversion. Below is wrong,
+  // just to make simple cases working.
+  return NewFromWide(jsrt::StringConvert::CopyRaw<uint16_t,char>, data, length);
 }
 
 Local<String> String::NewFromTwoByte(Isolate* isolate,

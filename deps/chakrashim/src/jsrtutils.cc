@@ -18,9 +18,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 // IN THE SOFTWARE.
 
+#include <stdarg.h>
 #include "jsrtutils.h"
-#include <functional>
-#include <algorithm>
 
 namespace jsrt {
 
@@ -50,12 +49,12 @@ JsErrorCode GetProperty(JsValueRef ref,
 }
 
 JsErrorCode GetProperty(JsValueRef ref,
-                        const wchar_t *propertyName,
+                        const char *propertyName,
                         JsValueRef *result) {
   JsPropertyIdRef idRef;
   JsErrorCode error;
 
-  error = JsGetPropertyIdFromName(propertyName, &idRef);
+  error = JsGetPropertyIdFromNameUtf8(propertyName, &idRef);
 
   if (error != JsNoError) {
     return error;
@@ -165,12 +164,12 @@ JsErrorCode CallGetter(JsValueRef ref,
   return ValueToIntLikely(value, result);
 }
 
-JsErrorCode GetPropertyOfGlobal(const wchar_t *propertyName,
+JsErrorCode GetPropertyOfGlobal(const char *propertyName,
                                 JsValueRef *ref) {
   JsErrorCode error;
   JsPropertyIdRef propertyIdRef, globalRef;
 
-  error = JsGetPropertyIdFromName(propertyName, &propertyIdRef);
+  error = JsGetPropertyIdFromNameUtf8(propertyName, &propertyIdRef);
   if (error != JsNoError) {
     return error;
   }
@@ -184,12 +183,12 @@ JsErrorCode GetPropertyOfGlobal(const wchar_t *propertyName,
   return JsGetProperty(globalRef, propertyIdRef, ref);
 }
 
-JsErrorCode SetPropertyOfGlobal(const wchar_t *propertyName,
+JsErrorCode SetPropertyOfGlobal(const char *propertyName,
                                 JsValueRef ref) {
   JsErrorCode error;
   JsPropertyIdRef propertyIdRef, globalRef;
 
-  error = JsGetPropertyIdFromName(propertyName, &propertyIdRef);
+  error = JsGetPropertyIdFromNameUtf8(propertyName, &propertyIdRef);
   if (error != JsNoError) {
     return error;
   }
@@ -355,24 +354,24 @@ JsErrorCode IsCaseInsensitiveStringValueInArray(JsValueRef arrayRef,
       return JsNoError;
     }
 
-    const wchar_t* firstPtr;
+    const char* firstPtr;
     size_t firstLength;
 
-    error = JsStringToPointer(first, &firstPtr, &firstLength);
+    error = JsStringToPointerUtf8(first, &firstPtr, &firstLength);
     if (error != JsNoError) {
       return error;
     }
 
-    const wchar_t* secondPtr;
+    const char* secondPtr;
     size_t secondLength;
 
-    error = JsStringToPointer(second, &secondPtr, &secondLength);
+    error = JsStringToPointerUtf8(second, &secondPtr, &secondLength);
     if (error != JsNoError) {
       return error;
     }
 
     size_t maxCount = min(firstLength, secondLength);
-    *areEqual = (_wcsnicmp(firstPtr, secondPtr, maxCount) == 0);
+    *areEqual = (strnicmp(firstPtr, secondPtr, maxCount) == 0);
     return JsNoError;
   },
                         result);
@@ -534,7 +533,7 @@ JsErrorCode CreateFunctionWithExternalData(
 
 JsErrorCode ToString(JsValueRef ref,
                      JsValueRef * strRef,
-                     const wchar_t** str,
+                     const char** str,
                      bool alreadyString) {
   // just a dummy here
   size_t size;
@@ -550,13 +549,13 @@ JsErrorCode ToString(JsValueRef ref,
     }
   }
 
-  error = JsStringToPointer(*strRef, str, &size);
+  error = JsStringToPointerUtf8(*strRef, str, &size);
   return error;
 }
 
 
 #define DEF_IS_TYPE(F) \
-JsErrorCode Call##F##(JsValueRef value, JsValueRef *resultRef) { \
+JsErrorCode Call##F(JsValueRef value, JsValueRef *resultRef) { \
   return CallFunction( \
     ContextShim::GetCurrent()->Get##F##Function(), \
     value, resultRef); \
@@ -704,7 +703,7 @@ JsErrorCode DefineProperty(JsValueRef object,
 }
 
 JsErrorCode DefineProperty(JsValueRef object,
-                           const wchar_t * propertyName,
+                           const char * propertyName,
                            PropertyDescriptorOptionValues writable,
                            PropertyDescriptorOptionValues enumerable,
                            PropertyDescriptorOptionValues configurable,
@@ -714,7 +713,7 @@ JsErrorCode DefineProperty(JsValueRef object,
   JsErrorCode error;
   JsPropertyIdRef propertyIdRef;
 
-  error = JsGetPropertyIdFromName(propertyName, &propertyIdRef);
+  error = JsGetPropertyIdFromNameUtf8(propertyName, &propertyIdRef);
   if (error != JsNoError) {
     return error;
   }
@@ -728,11 +727,11 @@ JsErrorCode DefineProperty(JsValueRef object,
 JsErrorCode GetPropertyIdFromName(JsValueRef nameRef,
                                   JsPropertyIdRef *idRef) {
   JsErrorCode error;
-  const wchar_t *propertyName;
+  const char *propertyName;
   size_t propertyNameSize;
 
   // Expect the name be either a String or a Symbol.
-  error = JsStringToPointer(nameRef, &propertyName, &propertyNameSize);
+  error = JsStringToPointerUtf8(nameRef, &propertyName, &propertyNameSize);
   if (error != JsNoError) {
     if (error == JsErrorInvalidArgument) {
       error = JsGetPropertyIdFromSymbol(nameRef, idRef);
@@ -741,7 +740,7 @@ JsErrorCode GetPropertyIdFromName(JsValueRef nameRef,
       }
     }
   } else {
-    error = JsGetPropertyIdFromName(propertyName, idRef);
+    error = JsGetPropertyIdFromNameUtf8(propertyName, idRef);
   }
 
   return error;
@@ -844,18 +843,18 @@ JsErrorCode HasIndexedProperty(JsValueRef object,
   return error;
 }
 
-JsErrorCode ParseScript(const wchar_t *script,
+JsErrorCode ParseScript(const char *script,
                         JsSourceContext sourceContext,
-                        const wchar_t *sourceUrl,
+                        const char *sourceUrl,
                         bool isStrictMode,
                         JsValueRef *result) {
   if (isStrictMode) {
     // do not append new line so the line numbers on error stack are correct
-    std::wstring useStrictTag(L"'use strict'; ");
-    return JsParseScript(useStrictTag.append(script).c_str(), sourceContext,
+    std::string useStrictTag("'use strict'; ");
+    return JsParseScriptUtf8(useStrictTag.append(script).c_str(), sourceContext,
                   sourceUrl, result);
   } else {
-    return JsParseScript(script, sourceContext, sourceUrl, result);
+    return JsParseScriptUtf8(script, sourceContext, sourceUrl, result);
   }
 }
 
@@ -1019,7 +1018,7 @@ void Fatal(const char * format, ...) {
   JsValueRef stackRef;
   JsValueRef strErrorRef;
   size_t stringLength;
-  const wchar_t* strError;
+  const char* strError;
 
   va_list args;
   va_start(args, format);
@@ -1036,11 +1035,11 @@ void Fatal(const char * format, ...) {
       fprintf(stderr, "\nImportant: This didn't happen because of an "
         "uncaught Javascript exception.\n");
   } else if (JsGetAndClearException(&exceptionRef) == JsNoError &&
-           GetProperty(exceptionRef, L"stack", &stackRef) == JsNoError &&
+           GetProperty(exceptionRef, "stack", &stackRef) == JsNoError &&
            JsConvertValueToString(stackRef, &strErrorRef) == JsNoError  &&
-           JsStringToPointer(strErrorRef, &strError,
-                             &stringLength) == JsNoError) {
-    fwprintf(stderr, L"\n%s\n", strError);
+           JsStringToPointerUtf8(strErrorRef, &strError,
+                                 &stringLength) == JsNoError) {
+    fprintf(stderr, "\n%s\n", strError);
   }
 
 #ifdef DEBUG
@@ -1051,7 +1050,7 @@ void Fatal(const char * format, ...) {
 }
 
 
-JsValueRef CALLBACK CollectGarbage(
+JsValueRef CHAKRA_CALLBACK CollectGarbage(
   JsValueRef callee,
   bool isConstructCall,
   JsValueRef *arguments,
@@ -1062,6 +1061,7 @@ JsValueRef CALLBACK CollectGarbage(
 }
 
 void IdleGC(uv_timer_t *timerHandler) {
+#ifdef _WIN32
   unsigned int nextIdleTicks;
   CHAKRA_VERIFY(JsIdle(&nextIdleTicks) == JsNoError);
   DWORD currentTicks = GetTickCount();
@@ -1082,6 +1082,11 @@ void IdleGC(uv_timer_t *timerHandler) {
   } else {
     IsolateShim::GetCurrent()->ResetIsIdleGcScheduled();
   }
+#else
+  // CHAKRA-TODO: implement. No GetTickCount()
+  IsolateShim::GetCurrent()->ResetScriptExecuted();
+  IsolateShim::GetCurrent()->ResetIsIdleGcScheduled();
+#endif
 }
 
 void PrepareIdleGC(uv_prepare_t* prepareHandler) {

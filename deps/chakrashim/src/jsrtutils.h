@@ -20,16 +20,45 @@
 
 #pragma once
 
+#include <assert.h>
+#include <functional>
+#include <stdint.h>
+#include <string.h>
 #include "v8.h"
 #include "uv.h"
+
+#ifndef _countof
+template <typename T, size_t N>
+inline size_t _countof(T (&)[N]) {
+  return N;
+}
+#endif
+
+#ifndef BYTE
+#define BYTE unsigned char
+#endif
+
+#ifndef _WIN32
+#define strnicmp strncasecmp
+#define __debugbreak __builtin_trap
+using std::min;
+using std::max;
+#endif
+
+#ifndef __APPLE__
+  #if defined(_MSC_VER) && _MSC_VER <= 1800 // VS2013?
+    #define THREAD_LOCAL __declspec(thread)
+  #else // VS2015+, linux Clang etc.
+    #define THREAD_LOCAL thread_local
+  #endif // VS2013?
+#else // __APPLE__
+  #define THREAD_LOCAL _Thread_local
+#endif
+
 #include "jsrtproxyutils.h"
 #include "jsrtcontextshim.h"
 #include "jsrtisolateshim.h"
-
-#include "stdint.h"
 #include "jsrtstringutils.h"
-#include <assert.h>
-#include <functional>
 
 #define IfComFailError(v) \
   { \
@@ -71,7 +100,7 @@ JsErrorCode GetProperty(JsValueRef ref,
                         JsValueRef *result);
 
 JsErrorCode GetProperty(JsValueRef ref,
-                        const wchar_t *propertyName,
+                        const char *propertyName,
                         JsValueRef *result);
 
 JsErrorCode GetProperty(JsValueRef ref,
@@ -169,10 +198,10 @@ JsErrorCode CallGetter(JsValueRef ref,
                        CachedPropertyIdRef cachedIdRef,
                        int* result);
 
-JsErrorCode GetPropertyOfGlobal(const wchar_t *propertyName,
+JsErrorCode GetPropertyOfGlobal(const char *propertyName,
                                 JsValueRef *ref);
 
-JsErrorCode SetPropertyOfGlobal(const wchar_t *propertyName,
+JsErrorCode SetPropertyOfGlobal(const char *propertyName,
                                 JsValueRef ref);
 
 JsValueRef GetNull();
@@ -223,21 +252,21 @@ JsErrorCode CreateFunctionWithExternalData(JsNativeFunction,
 
 JsErrorCode ToString(JsValueRef ref,
                      JsValueRef * strRef,
-                     const wchar_t** str,
+                     const char** str,
                      bool alreadyString = false);
 
 #define DEF_IS_TYPE(F) \
-JsErrorCode Call##F##(JsValueRef value,  \
+JsErrorCode Call##F(JsValueRef value,  \
 JsValueRef *resultRef); \
 
 #include "jsrtcachedpropertyidref.inc"
 #undef DEF_IS_TYPE
 
-JsValueRef CALLBACK CollectGarbage(JsValueRef callee,
-                                   bool isConstructCall,
-                                   JsValueRef *arguments,
-                                   unsigned short argumentCount,
-                                   void *callbackState);
+JsValueRef CHAKRA_CALLBACK CollectGarbage(JsValueRef callee,
+                                          bool isConstructCall,
+                                          JsValueRef *arguments,
+                                          unsigned short argumentCount,
+                                          void *callbackState);
 
 // the possible values for the property descriptor options
 enum PropertyDescriptorOptionValues {
@@ -264,7 +293,7 @@ JsErrorCode CreatePropertyDescriptor(v8::PropertyAttribute attributes,
                                      JsValueRef *descriptor);
 
 JsErrorCode DefineProperty(JsValueRef object,
-                           const wchar_t * propertyName,
+                           const char * propertyName,
                            PropertyDescriptorOptionValues writable,
                            PropertyDescriptorOptionValues enumerable,
                            PropertyDescriptorOptionValues configurable,
@@ -300,9 +329,9 @@ JsErrorCode GetIndexedProperty(JsValueRef object,
 
 // CHAKRA-TODO : Currently Chakra's ParseScript doesn't support strictMode
 // flag. As a workaround, prepend the script text with 'use strict'.
-JsErrorCode ParseScript(const wchar_t *script,
+JsErrorCode ParseScript(const char *script,
                         JsSourceContext sourceContext,
-                        const wchar_t *sourceUrl,
+                        const char *sourceUrl,
                         bool isStrictMode,
                         JsValueRef *result);
 

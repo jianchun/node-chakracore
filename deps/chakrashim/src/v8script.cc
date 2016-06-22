@@ -25,7 +25,7 @@ namespace v8 {
 
 using CachedPropertyIdRef = jsrt::CachedPropertyIdRef;
 
-__declspec(thread) JsSourceContext currentContext;
+THREAD_LOCAL JsSourceContext currentContext;
 extern bool g_useStrict;
 
 Local<Script> Script::Compile(Handle<String> source, ScriptOrigin* origin) {
@@ -65,17 +65,17 @@ MaybeLocal<Script> Script::Compile(Local<Context> context,
                                    ScriptOrigin* origin) {
   JsErrorCode error;
   JsValueRef filenameRef;
-  const wchar_t* filename = L"";
+  const char* filename = "";
 
   if (origin != nullptr) {
     error = jsrt::ToString(*origin->ResourceName(), &filenameRef, &filename);
   } else {
-    error = JsPointerToString(filename, 0, &filenameRef);
+    error = JsPointerToStringUtf8(filename, 0, &filenameRef);
   }
 
   if (error == JsNoError) {
     JsValueRef sourceRef;
-    const wchar_t *script;
+    const char *script;
     error = jsrt::ToString(*source, &sourceRef, &script);
     if (error == JsNoError) {
       JsValueRef scriptFunction;
@@ -121,7 +121,7 @@ Local<Value> Script::Run() {
   return FromMaybe(Run(Local<Context>()));
 }
 
-static void CALLBACK UnboundScriptFinalizeCallback(void * data) {
+static void CHAKRA_CALLBACK UnboundScriptFinalizeCallback(void * data) {
   JsValueRef * unboundScriptData = static_cast<JsValueRef *>(data);
   delete unboundScriptData;
 }
@@ -161,9 +161,9 @@ Local<Script> UnboundScript::BindToCurrentContext() {
   }
 
   // Create a script object in another context
-  const wchar_t * source;
+  const char * source;
   size_t sourceLength;
-  const wchar_t * filename;
+  const char * filename;
   size_t filenameLength;
 
   {
@@ -184,11 +184,11 @@ Local<Script> UnboundScript::BindToCurrentContext() {
                           &originalFilenameRef) != JsNoError) {
       return Local<Script>();
     }
-    if (JsStringToPointer(originalSourceRef,
+    if (JsStringToPointerUtf8(originalSourceRef,
                           &source, &sourceLength) != JsNoError) {
       return Local<Script>();
     }
-    if (JsStringToPointer(originalFilenameRef,
+    if (JsStringToPointerUtf8(originalFilenameRef,
                           &filename, &filenameLength) != JsNoError) {
       return Local<Script>();
     }
@@ -201,12 +201,13 @@ Local<Script> UnboundScript::BindToCurrentContext() {
   }
 
   JsValueRef sourceRef;
-  if (JsPointerToString(source, sourceLength, &sourceRef) != JsNoError) {
+  if (JsPointerToStringUtf8(source, sourceLength, &sourceRef) != JsNoError) {
     return Local<Script>();
   }
 
   JsValueRef filenameRef;
-  if (JsPointerToString(filename, filenameLength, &filenameRef) != JsNoError) {
+  if (JsPointerToStringUtf8(filename, filenameLength,
+                            &filenameRef) != JsNoError) {
     return Local<Script>();
   }
 

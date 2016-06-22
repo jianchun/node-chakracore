@@ -29,17 +29,17 @@ extern bool g_disableIdleGc;
 }
 namespace jsrt {
 
-/* static */ __declspec(thread) IsolateShim * IsolateShim::s_currentIsolate;
+/* static */ THREAD_LOCAL IsolateShim * IsolateShim::s_currentIsolate;
 /* static */ IsolateShim * IsolateShim::s_isolateList = nullptr;
 
 IsolateShim::IsolateShim(JsRuntimeHandle runtime)
     : runtime(runtime),
-      contextScopeStack(nullptr),
       symbolPropertyIdRefs(),
       cachedPropertyIdRefs(),
-      embeddedData(),
       isDisposing(false),
-      tryCatchStackTop(nullptr) {
+      contextScopeStack(nullptr),
+      tryCatchStackTop(nullptr),
+      embeddedData() {
   // CHAKRA-TODO: multithread locking for s_isolateList?
   this->prevnext = &s_isolateList;
   this->next = s_isolateList;
@@ -158,8 +158,8 @@ bool IsolateShim::IsDisposing() {
 
 // CHAKRA-TODO: This is not called after cross context work in chakra. Fix this
 // else we will leak chakrashim object.
-void CALLBACK IsolateShim::JsContextBeforeCollectCallback(JsRef contextRef,
-                                                          void *data) {
+void CHAKRA_CALLBACK IsolateShim::JsContextBeforeCollectCallback(
+    JsRef contextRef, void *data) {
   IsolateShim * isolateShim = reinterpret_cast<IsolateShim *>(data);
   ContextShim * contextShim = isolateShim->GetContextShim(contextRef);
   delete contextShim;
@@ -224,8 +224,7 @@ void IsolateShim::PushScope(
   this->contextScopeStack = scope;
 
   // Don't crash even if we fail to set the context
-  JsErrorCode errorCode = JsSetCurrentContext(contextShim->GetContextRef());
-  CHAKRA_ASSERT(errorCode == JsNoError);
+  JsSetCurrentContext(contextShim->GetContextRef());
 
   if (!contextShim->EnsureInitialized()) {
     Fatal("Failed to initialize context");
@@ -245,9 +244,7 @@ void IsolateShim::PopScope(ContextShim::Scope * scope) {
     }
 
     // Don't crash even if we fail to set the context
-    JsErrorCode errorCode = JsSetCurrentContext(
-      prevScope->contextShim->GetContextRef());
-    CHAKRA_ASSERT(errorCode == JsNoError);
+    JsSetCurrentContext(prevScope->contextShim->GetContextRef());
 
     // Propagate the exception to parent scope
     if (exception != JS_INVALID_REFERENCE) {
@@ -296,9 +293,9 @@ JsPropertyIdRef IsolateShim::GetCachedSymbolPropertyIdRef(
   });
 }
 
-static wchar_t const *
+static char const *
 const s_cachedPropertyIdRefNames[CachedPropertyIdRef::Count] = {
-#define DEF(x) L#x,
+#define DEF(x) #x,
 #include "jsrtcachedpropertyidref.inc"
 };
 
@@ -306,7 +303,7 @@ JsPropertyIdRef IsolateShim::GetCachedPropertyIdRef(
     CachedPropertyIdRef cachedPropertyIdRef) {
   return GetCachedPropertyId(cachedPropertyIdRefs, cachedPropertyIdRef,
                     [](CachedPropertyIdRef index, JsPropertyIdRef* propIdRef) {
-    return JsGetPropertyIdFromName(s_cachedPropertyIdRefNames[index],
+    return JsGetPropertyIdFromNameUtf8(s_cachedPropertyIdRefNames[index],
                                    propIdRef) == JsNoError;
   });
 }

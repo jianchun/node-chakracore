@@ -1,2 +1,3 @@
-chakracore.h
-chakracommon.h
+ChakraCore.h
+ChakraCommon.h
+ChakraDebug.h

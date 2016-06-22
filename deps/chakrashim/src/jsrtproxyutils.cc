@@ -118,10 +118,10 @@ JsErrorCode TryParseUInt32(
 
   // check that every character in the str is a digit, and that the string does
   // not start with a zero, unless it is a zero
-  const wchar_t *strPtr;
+  const char *strPtr;
   size_t strLength;
 
-  error = JsStringToPointer(strRef, &strPtr, &strLength);
+  error = JsStringToPointerUtf8(strRef, &strPtr, &strLength);
   if (error != JsNoError) {
     // If strRef is not a string, just return not Uint32
     return error == JsErrorInvalidArgument ? JsNoError : error;
@@ -134,7 +134,7 @@ JsErrorCode TryParseUInt32(
 
   // deal with the case in which zero is the first letter, in which we will
   // accept it only if the string reperesents zero itself
-  if (strPtr[0] == L'0') {
+  if (strPtr[0] == '0') {
     if (strLength == 1) {
       *uint32Value = 0;
       *isUInt32 = true;
@@ -145,7 +145,7 @@ JsErrorCode TryParseUInt32(
 
   // iterate over the charecters, allow only digits:
   for (size_t i = 0; i < strLength; i++) {
-    if (strPtr[i] < L'0' || strPtr[i] > L'9') {
+    if (strPtr[i] < '0' || strPtr[i] > '9') {
       return JsNoError;
     }
   }
@@ -156,13 +156,14 @@ JsErrorCode TryParseUInt32(
   // fastest:
   // http://tinodidriksen.com/2010/02/16/cpp-convert-string-to-int-speed/
 
-  wchar_t* strEnd;
-  unsigned long longVal = std::wcstoul(strPtr, &strEnd, 10);
+  char* strEnd;
+  unsigned long longVal = std::strtoul(strPtr, &strEnd, 10);
   if (strEnd != strPtr + strLength) {
     return JsNoError;
   }
 
-  if (longVal == ULONG_MAX) {
+  // xplat-todo: revisit range check
+  if (longVal > UINT32_MAX) {
     // check if errno is set:
     if (errno == ERANGE) {
       return JsNoError;

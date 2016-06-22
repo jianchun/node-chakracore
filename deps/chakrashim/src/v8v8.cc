@@ -37,6 +37,7 @@ const char *V8::GetVersion() {
   static char versionStr[32] = {};
 
   if (versionStr[0] == '\0') {
+#ifdef _WIN32
     HMODULE hModule;
     if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                           TEXT(NODE_ENGINE), &hModule)) {
@@ -62,6 +63,8 @@ const char *V8::GetVersion() {
         }
       }
     }
+#else
+#endif
   }
 
   return versionStr;
@@ -119,7 +122,7 @@ void V8::SetFlagsFromCommandLine(int *argc, char **argv, bool remove_flags) {
                 || startsWith(arg, "--stack-size="))) {
       argv[i] = nullptr;
     } else if (equals("--help", arg)) {
-        char* helpText =
+        printf(
           "Options:\n"
           " --use_strict (enforce strict mode)\n"
           "     type: bool  default: false\n"
@@ -130,8 +133,7 @@ void V8::SetFlagsFromCommandLine(int *argc, char **argv, bool remove_flags) {
           " --harmony (Other flags are ignored in node running with "
           "chakracore)\n"
           " --debug (Ignored in node running with chakracore)\n"
-          " --stack-size (Ignored in node running with chakracore)\n";
-        fprintf(stdout, helpText);
+          " --stack-size (Ignored in node running with chakracore)\n");
         exit(0);
     }
   }

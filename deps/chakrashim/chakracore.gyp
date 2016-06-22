@@ -24,15 +24,27 @@
       'type': 'none',
 
       'variables': {
-        'chakracore_sln': '<(chakra_dir)/build/Chakra.Core.sln',
         'chakracore_header': [
-          '<(chakra_dir)/lib/jsrt/chakracore.h',
-          '<(chakra_dir)/lib/jsrt/chakracommon.h'
+          '<(chakra_dir)/lib/Jsrt/ChakraCore.h',
+          '<(chakra_dir)/lib/Jsrt/ChakraCommon.h',
+          '<(chakra_dir)/lib/Jsrt/ChakraDebug.h',
         ],
-        'chakracore_binaries': [
-          '<(chakra_dir)/build/vcbuild/bin/<(Platform)_$(ConfigurationName)/chakracore.dll',
-          '<(chakra_dir)/build/vcbuild/bin/<(Platform)_$(ConfigurationName)/chakracore.pdb',
-          '<(chakra_dir)/build/vcbuild/bin/<(Platform)_$(ConfigurationName)/chakracore.lib',
+        'chakracore_win_bin_dir':
+          '<(chakra_dir)/build/vcbuild/bin/<(Platform)_$(ConfigurationName)',
+        'conditions': [
+          ['OS=="win"', {
+            'chakracore_input': '<(chakra_dir)/build/Chakra.Core.sln',
+            'chakracore_binaries': [
+              '<(chakracore_win_bin_dir)/chakracore.dll',
+              '<(chakracore_win_bin_dir)/chakracore.pdb',
+              '<(chakracore_win_bin_dir)/chakracore.lib',
+            ],
+          }, {
+            'chakracore_input': '<(chakra_dir)/build.sh',
+            'chakracore_binaries': [
+              '<(chakra_dir)/BuildLinux/Release/libChakraCore.so',
+            ],
+          }],
         ],
       },
 
@@ -40,19 +52,25 @@
         {
           'action_name': 'build_chakracore',
           'inputs': [
-            '<(chakracore_sln)'
+            '<(chakracore_input)',
           ],
           'outputs': [
             '<@(chakracore_binaries)',
           ],
-          'action': [
-            'msbuild',
-            '/p:Platform=<(Platform)',
-            '/p:Configuration=$(ConfigurationName)',
-            '/p:RuntimeLib=<(component)',
-            '<(msvs_windows_target_platform_version_prop)',
-            '/m',
-            '<@(_inputs)',
+          'conditions': [
+            ['OS=="win"', {
+              'action': [
+                'msbuild',
+                '/p:Platform=<(Platform)',
+                '/p:Configuration=$(ConfigurationName)',
+                '/p:RuntimeLib=<(component)',
+                '<(msvs_windows_target_platform_version_prop)',
+                '/m',
+                '<@(_inputs)',
+              ],
+            }, {
+              'action': [ 'bash', '<(chakra_dir)/build.sh', '-j' ],
+            }],
           ],
         },
       ],

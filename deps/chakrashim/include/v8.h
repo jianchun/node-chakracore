@@ -55,18 +55,25 @@
 #define USE_EDGEMODE_JSRT     // Only works with edge JSRT
 #endif
 
-#include "chakracore.h"
-
 #include <stdio.h>
 #include <stdint.h>
 #include <memory>
+#include "ChakraCore.h"
 #include "v8-version.h"
 #include "v8config.h"
 
+#ifdef _WIN32
 #ifdef BUILDING_CHAKRASHIM
 #define V8_EXPORT __declspec(dllexport)
 #else
 #define V8_EXPORT __declspec(dllimport)
+#endif
+#else  // !_WIN32
+#ifdef BUILDING_CHAKRASHIM
+#define V8_EXPORT __attribute__ ((visibility("default")))
+#else
+#define V8_EXPORT
+#endif
 #endif
 
 #define TYPE_CHECK(T, S)                                       \
@@ -359,10 +366,7 @@ class MaybeLocal {
     return !IsEmpty();
   }
 
-  Local<T> ToLocalChecked() {
-    if (V8_UNLIKELY(val_ == nullptr)) V8::ToLocalEmpty();
-    return Local<T>(val_);
-  }
+  V8_INLINE Local<T> ToLocalChecked();
 
   template <class S>
   Local<S> FromMaybe(Local<S> default_value) const {
@@ -445,7 +449,10 @@ struct WeakReferenceCallbackWrapper {
   };
   bool isWeakCallbackInfo;
 };
+#ifdef _WIN32
+// xplat-todo: Is this still needed? Fail to compile xplat.
 template class V8_EXPORT std::shared_ptr<WeakReferenceCallbackWrapper>;
+#endif
 
 // A helper method for setting an object with a WeakReferenceCallback. The
 // callback will be called before the object is released.
@@ -642,7 +649,7 @@ class Persistent : public PersistentBase<T> {
 
   template <class S>
   V8_INLINE Persistent& operator=(const Local<S>& other) {
-    Reset(nullptr, other);
+    this->Reset(nullptr, other);
     return *this;
   }
   V8_INLINE Persistent& operator=(JsRef other) {
@@ -712,7 +719,7 @@ class Eternal : private Persistent<T> {
   }
 
   template<class S> void Set(Isolate* isolate, Local<S> handle) {
-    Reset(isolate, handle);
+    this->Reset(isolate, handle);
   }
 };
 
@@ -1212,12 +1219,6 @@ class V8_EXPORT String : public Name {
     uint16_t* _str;
     int _length;
   };
-
- private:
-  template <class ToWide>
-  static MaybeLocal<String> New(const ToWide& toWide,
-                                const char *data, int length = -1);
-  static MaybeLocal<String> New(const wchar_t *data, int length = -1);
 };
 
 class V8_EXPORT Number : public Primitive {
@@ -1530,11 +1531,11 @@ class ReturnValue {
   void Set(int32_t value) { Set(Integer::From(value)); }
   void Set(uint32_t value) { Set(Integer::From(value)); }
   // Fast JS primitive setters
-  void SetNull() { Set(Null(nullptr)); }
-  void SetUndefined() { Set(Undefined(nullptr)); }
-  void SetEmptyString() { Set(String::Empty(nullptr)); }
+  V8_INLINE void SetNull();
+  V8_INLINE void SetUndefined();
+  V8_INLINE void SetEmptyString();
   // Convenience getter for Isolate
-  Isolate* GetIsolate() { return Isolate::GetCurrent(); }
+  V8_INLINE Isolate* GetIsolate();
 
   Value* Get() const { return *_value; }
  private:
@@ -1551,16 +1552,13 @@ template<typename T>
 class FunctionCallbackInfo {
  public:
   int Length() const { return _length; }
-  Local<Value> operator[](int i) const {
-    return (i >= 0 && i < _length) ?
-      _args[i] : Undefined(nullptr).As<Value>();
-  }
+  V8_INLINE Local<Value> operator[](int i) const;
   Local<Function> Callee() const { return _callee; }
   Local<Object> This() const { return _thisPointer; }
   Local<Object> Holder() const { return _holder; }
   bool IsConstructCall() const { return _isConstructorCall; }
   Local<Value> Data() const { return _data; }
-  Isolate* GetIsolate() const { return Isolate::GetCurrent(); }
+  V8_INLINE Isolate* GetIsolate() const;
   ReturnValue<T> GetReturnValue() const {
     return ReturnValue<T>(
       &(const_cast<FunctionCallbackInfo<T>*>(this)->_returnValue));
@@ -1585,13 +1583,13 @@ class FunctionCallbackInfo {
   }
 
  private:
+  Value** _args;
   int _length;
   Local<Object> _thisPointer;
   Local<Object> _holder;
-  Local<Function> _callee;
-  Local<Value> _data;
   bool _isConstructorCall;
-  Value** _args;
+  Local<Value> _data;
+  Local<Function> _callee;
   Value* _returnValue;
 };
 
@@ -1599,7 +1597,7 @@ class FunctionCallbackInfo {
 template<typename T>
 class PropertyCallbackInfo {
  public:
-  Isolate* GetIsolate() const { return Isolate::GetCurrent(); }
+  V8_INLINE Isolate* GetIsolate() const;
   Local<Value> Data() const { return _data; }
   Local<Object> This() const { return _thisObject; }
   Local<Object> Holder() const { return _holder; }
@@ -1691,7 +1689,7 @@ public:
                                Local<Object> local_target,
                                Local<Object> local_handler);
 
-  V8_INLINE static Proxy* Cast(Value* obj);
+  static Proxy* Cast(Value* obj);
 
 private:
   Proxy();
@@ -2431,7 +2429,7 @@ Local<T> Local<T>::New(T* that) {
 
 // Context are not javascript values, so we need to specialize them
 template <>
-Local<Context> Local<Context>::New(Context* that) {
+V8_INLINE Local<Context> Local<Context>::New(Context* that) {
   if (!HandleScope::GetCurrent()->AddLocalContext(that)) {
     return Local<Context>();
   }
@@ -2446,6 +2444,12 @@ Local<T> Local<T>::New(Isolate* isolate, Local<T> that) {
 template <class T>
 Local<T> Local<T>::New(Isolate* isolate, const PersistentBase<T>& that) {
   return New(isolate, that.val_);
+}
+
+template <class T>
+Local<T> MaybeLocal<T>::ToLocalChecked() {
+  if (V8_UNLIKELY(val_ == nullptr)) V8::ToLocalEmpty();
+  return Local<T>(val_);
 }
 
 //
@@ -2469,8 +2473,8 @@ void Persistent<T, M>::Copy(const Persistent<S, M2>& that) {
 
   this->val_ = that.val_;
   this->_weakWrapper = that._weakWrapper;
-  if (val_ && !IsWeak()) {
-    JsAddRef(val_, nullptr);
+  if (this->val_ && !this->IsWeak()) {
+    JsAddRef(this->val_, nullptr);
   }
 
   M::Copy(that, this);
@@ -2597,6 +2601,42 @@ inline Local<Context> HandleScope::Close(Handle<Context> value) {
   }
 
   return Local<Context>(*value);
+}
+
+template<typename T>
+void ReturnValue<T>::SetNull() {
+  Set(Null(nullptr));
+}
+
+template<typename T>
+void ReturnValue<T>::SetUndefined() {
+  Set(Undefined(nullptr));
+}
+
+template<typename T>
+void ReturnValue<T>::SetEmptyString() {
+  Set(String::Empty(nullptr));
+}
+
+template<typename T>
+Isolate* ReturnValue<T>::GetIsolate() {
+  return Isolate::GetCurrent();
+}
+
+template<typename T>
+Local<Value> FunctionCallbackInfo<T>::operator[](int i) const {
+  return (i >= 0 && i < _length) ?
+    _args[i] : Undefined(nullptr).As<Value>();
+}
+
+template<typename T>
+Isolate* FunctionCallbackInfo<T>::GetIsolate() const {
+  return Isolate::GetCurrent();
+}
+
+template<typename T>
+Isolate* PropertyCallbackInfo<T>::GetIsolate() const {
+  return Isolate::GetCurrent();
 }
 
 }  // namespace v8

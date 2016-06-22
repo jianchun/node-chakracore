@@ -104,6 +104,10 @@
     JsGetRuntime
     JsIdle
     JsSetPromiseContinuationCallback
+    JsStringToPointerUtf8
+    JsPointerToStringUtf8
+    JsGetPropertyIdFromNameUtf8
+    JsParseScriptUtf8
     JsRunScriptUtf8
     JsSerializeScriptUtf8
     JsRunSerializedScriptUtf8

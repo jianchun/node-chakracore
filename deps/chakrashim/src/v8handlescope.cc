@@ -42,7 +42,9 @@ HandleScope::~HandleScope() {
   while (currRecord != nullptr) {
     AddRefRecord * nextRecord = currRecord->_next;
     // Don't crash even if we fail to release the scope
-    JsRelease(currRecord->_ref, nullptr);
+    JsErrorCode errorCode = JsRelease(currRecord->_ref, nullptr);
+    CHAKRA_ASSERT(errorCode == JsNoError);
+    UNUSED(errorCode);
     delete currRecord;
     currRecord = nextRecord;
   }
@@ -53,7 +55,7 @@ HandleScope *HandleScope::GetCurrent() {
 }
 
 bool HandleScope::AddLocal(JsValueRef value) {
-  if (_count < _countof(_locals)) {
+  if (static_cast<size_t>(_count) < _countof(_locals)) {
     _locals[_count++] = value;
     return true;
   }

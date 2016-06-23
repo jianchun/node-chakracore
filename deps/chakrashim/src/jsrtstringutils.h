@@ -22,11 +22,15 @@ namespace jsrt {
 // Internal class for converting strings to Wide Chars and vice versa
 class StringConvert {
  public:
+
+// xplat-todo: The string utilities in this file uses Windows only APIs. Need to
+// implement differently for cross-platform.
+#ifdef _WIN32
   static JsErrorCode ToChar(const wchar_t *str,
                             const size_t length,
                             char* buffer,
                             const size_t size) {
-    return InternalToChar(str, length, /*CP_ACP*/0, buffer, size);
+    return InternalToChar(str, length, CP_ACP, buffer, size);
   }
 
   static JsErrorCode ToUTF8Char(const wchar_t *str,
@@ -36,7 +40,7 @@ class StringConvert {
                                 size_t *bytesWritten = nullptr,
                                 size_t *charsWrittern = nullptr) {
     return InternalToChar(
-      str, length, /*CP_UTF8*/0, buffer, size, bytesWritten, charsWrittern);
+      str, length, CP_UTF8, buffer, size, bytesWritten, charsWrittern);
   }
 
   static JsErrorCode ToWChar(const char *str,
@@ -44,13 +48,14 @@ class StringConvert {
                              wchar_t* buffer,
                              const size_t size,
                              size_t *charsWritten) {
-    return InternalToWChar(str, length, /*CP_UTF8*/0, buffer, size, charsWritten);
+    return InternalToWChar(str, length, CP_UTF8, buffer, size, charsWritten);
   }
 
   static JsErrorCode UTF8CharLength(
       const wchar_t *str, const size_t length, size_t *utf8Length) {
-    return GetCharLength(str, length, /*CP_UTF8*/0, utf8Length);
+    return GetCharLength(str, length, CP_UTF8, utf8Length);
   }
+#endif  // _WIN32
 
   template <class SrcChar, class DstChar>
   static JsErrorCode CopyRaw(const SrcChar* src,

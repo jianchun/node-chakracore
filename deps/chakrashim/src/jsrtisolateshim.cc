@@ -224,7 +224,9 @@ void IsolateShim::PushScope(
   this->contextScopeStack = scope;
 
   // Don't crash even if we fail to set the context
-  JsSetCurrentContext(contextShim->GetContextRef());
+  JsErrorCode errorCode = JsSetCurrentContext(contextShim->GetContextRef());
+  CHAKRA_ASSERT(errorCode == JsNoError);
+  UNUSED(errorCode);
 
   if (!contextShim->EnsureInitialized()) {
     Fatal("Failed to initialize context");
@@ -244,7 +246,10 @@ void IsolateShim::PopScope(ContextShim::Scope * scope) {
     }
 
     // Don't crash even if we fail to set the context
-    JsSetCurrentContext(prevScope->contextShim->GetContextRef());
+    JsErrorCode errorCode = JsSetCurrentContext(
+      prevScope->contextShim->GetContextRef());
+    CHAKRA_ASSERT(errorCode == JsNoError);
+    UNUSED(errorCode);
 
     // Propagate the exception to parent scope
     if (exception != JS_INVALID_REFERENCE) {

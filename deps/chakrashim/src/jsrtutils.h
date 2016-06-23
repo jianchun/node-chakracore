@@ -38,6 +38,10 @@ inline size_t _countof(T (&)[N]) {
 #define BYTE unsigned char
 #endif
 
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+
 #ifndef _WIN32
 #define strnicmp strncasecmp
 #define __debugbreak __builtin_trap

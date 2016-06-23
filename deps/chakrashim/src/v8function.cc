@@ -87,7 +87,7 @@ Local<Value> Function::Call(Handle<Value> recv,
 }
 
 void Function::SetName(Handle<String> name) {
-  DefineProperty((JsValueRef)this,
+  JsErrorCode error = DefineProperty((JsValueRef)this,
                  IsolateShim::GetCurrent()->GetCachedPropertyIdRef(
                    jsrt::CachedPropertyIdRef::name),
                  PropertyDescriptorOptionValues::False,
@@ -96,6 +96,8 @@ void Function::SetName(Handle<String> name) {
                  (JsValueRef)*name,
                  JS_INVALID_REFERENCE,
                  JS_INVALID_REFERENCE);
+  CHAKRA_ASSERT(error == JsNoError);
+  UNUSED(error);
 }
 
 Function *Function::Cast(Value *obj) {

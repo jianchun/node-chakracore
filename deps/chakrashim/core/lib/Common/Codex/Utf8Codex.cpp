@@ -313,6 +313,21 @@ LFourByte:
         return ptr;
     }
 
+    LPUTF8 EncodeSurrogatePair(char16 surrogateHigh, char16 surrogateLow, __out_ecount(3) LPUTF8 ptr)
+    {
+        uint32 highTen = (surrogateHigh - 0xD800);
+        uint32 lowTen  = (surrogateLow - 0xDC00);
+        uint32 codepoint = 0x10000 + ((highTen << 10) | lowTen);
+
+        // Four bytes
+        *ptr++ = static_cast<utf8char_t>(codepoint >> 18) | 0xF0;
+        *ptr++ = static_cast<utf8char_t>((codepoint >> 12) & 0x3F) | 0x80;
+        *ptr++ = static_cast<utf8char_t>((codepoint >> 6) & 0x3F) | 0x80;
+        *ptr++ = static_cast<utf8char_t>(codepoint & 0x3F) | 0x80;
+
+        return ptr;
+    }
+
     LPCUTF8 NextCharFull(LPCUTF8 ptr)
     {
         return ptr + EncodedBytes(*ptr);
@@ -431,7 +446,8 @@ LSlowPath:
     }
 
     __range(0, cch * 3)
-    size_t EncodeInto(__out_ecount(cch * 3) LPUTF8 buffer, __in_ecount(cch) const char16 *source, charcount_t cch)
+    template <bool cesu8Encoding>
+    size_t EncodeIntoImpl(__out_ecount(cch * 3) LPUTF8 buffer, __in_ecount(cch) const char16 *source, charcount_t cch)
     {
         LPUTF8 dest = buffer;
 
@@ -451,13 +467,34 @@ LFastPath:
         }
 
 LSlowPath:
-        while( cch-- > 0 )
+        if (cesu8Encoding)
         {
-            dest = Encode(*source++, dest);
-            if (ShouldFastPath(dest, source)) goto LFastPath;
+            while (cch-- > 0)
+            {
+                dest = Encode(*source++, dest);
+                if (ShouldFastPath(dest, source)) goto LFastPath;
+            }
+        }
+        else
+        {
+            while (cch-- > 0)
+            {
+                // We increment the source pointer here since at least one utf16 code unit is read here
+                // If the code unit turns out to be the high surrogate in a surrogate pair, then 
+                // EncodeTrueUtf8 will consume the low surrogate code unit too by decrementing cch 
+                // and incrementing source
+                dest = EncodeTrueUtf8(*source++, &source, &cch, dest);
+                if (ShouldFastPath(dest, source)) goto LFastPath;
+            }
         }
 
         return dest - buffer;
+    }
+
+    __range(0, cch * 3)
+        size_t EncodeInto(__out_ecount(cch * 3) LPUTF8 buffer, __in_ecount(cch) const char16 *source, charcount_t cch)
+    {
+        return EncodeIntoImpl<true>(buffer, source, cch);
     }
 
     __range(0, cch * 3)
@@ -468,7 +505,13 @@ LSlowPath:
         return result;
     }
 
-
+    __range(0, cch * 3)
+        size_t EncodeTrueUtf8IntoAndNullTerminate(__out_ecount(cch * 3 + 1) utf8char_t *buffer, __in_ecount(cch) const char16 *source, charcount_t cch)
+    {
+        size_t result = EncodeIntoImpl<false>(buffer, source, cch);
+        buffer[result] = 0;
+        return result;
+    }
 
     // Convert the character index into a byte index.
     size_t CharacterIndexToByteIndex(__in_ecount(cbLength) LPCUTF8 pch, size_t cbLength, charcount_t cchIndex, DecodeOptions options)

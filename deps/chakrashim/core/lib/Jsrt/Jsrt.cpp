@@ -70,44 +70,8 @@ JsErrorCode CheckContext(JsrtContext *currentContext, bool verifyRuntimeState, b
     return JsNoError;
 }
 
-
-#ifndef _WIN32
-class _AutoProcessInit
-{
-public:
-    _AutoProcessInit() : initialized(false)
-    {
-    }
-
-    ~_AutoProcessInit()
-    {
-        if (initialized)
-        {
-            PAL_Shutdown();
-        }
-    }
-
-    void CheckInit()
-    {
-        if (!initialized)
-        {
-            initialized = true;
-            PAL_InitializeChakraCore(0, nullptr);
-        }
-    }
-
-private:
-    bool initialized;
-} g_autoProcessInit;
-#endif
-
-
 CHAKRA_API JsCreateRuntime(_In_ JsRuntimeAttributes attributes, _In_opt_ JsThreadServiceCallback threadService, _Out_ JsRuntimeHandle *runtimeHandle)
 {
-#ifndef _WIN32
-    g_autoProcessInit.CheckInit();
-#endif
-
     return GlobalAPIWrapper([&] () -> JsErrorCode {
         PARAM_NOT_NULL(runtimeHandle);
         *runtimeHandle = nullptr;
@@ -120,8 +84,7 @@ CHAKRA_API JsCreateRuntime(_In_ JsRuntimeAttributes attributes, _In_opt_ JsThrea
             JsRuntimeAttributeDisableEval |
             JsRuntimeAttributeDisableNativeCodeGeneration |
             JsRuntimeAttributeEnableExperimentalFeatures |
-            JsRuntimeAttributeDispatchSetExceptionsToDebugger |
-            JsRuntimeAttributeEnableSimdjsFeature
+            JsRuntimeAttributeDispatchSetExceptionsToDebugger
 #ifdef ENABLE_DEBUG_CONFIG_OPTIONS
             | JsRuntimeAttributeSerializeLibraryByteCode
 #endif
@@ -135,8 +98,7 @@ CHAKRA_API JsCreateRuntime(_In_ JsRuntimeAttributes attributes, _In_opt_ JsThrea
 
         AllocationPolicyManager * policyManager = HeapNew(AllocationPolicyManager, (attributes & JsRuntimeAttributeDisableBackgroundWork) == 0);
         bool enableExperimentalFeatures = (attributes & JsRuntimeAttributeEnableExperimentalFeatures) != 0;
-        bool enableSimdjsFeature = (attributes & JsRuntimeAttributeEnableSimdjsFeature) != 0;
-        ThreadContext * threadContext = HeapNew(ThreadContext, policyManager, threadService, enableExperimentalFeatures, enableSimdjsFeature);
+        ThreadContext * threadContext = HeapNew(ThreadContext, policyManager, threadService, enableExperimentalFeatures);
 
         if (((attributes & JsRuntimeAttributeDisableBackgroundWork) != 0)
 #ifdef ENABLE_DEBUG_CONFIG_OPTIONS

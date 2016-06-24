@@ -39,7 +39,7 @@ namespace utf8
             return E_OUTOFMEMORY;
         }
 
-        size_t cbEncoded = utf8::EncodeIntoAndNullTerminate(destString, sourceString, (charcount_t) cchSourceString);
+        size_t cbEncoded = utf8::EncodeTrueUtf8IntoAndNullTerminate(destString, sourceString, (charcount_t) cchSourceString);
         Assert(cbEncoded <= cbDestString);
         static_assert(sizeof(utf8char_t) == sizeof(char), "Needs to be valid for cast");
         *destStringPtr = (char*)destString;

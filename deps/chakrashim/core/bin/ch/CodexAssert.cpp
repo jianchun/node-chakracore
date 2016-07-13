@@ -10,3 +10,12 @@ void CodexAssert(bool condition)
 {
     Assert(condition);
 }
+
+void CodexFailFast(bool condition)
+{
+    Assert(condition);
+    if (!condition)
+    {
+        exit(-1);
+    }
+}

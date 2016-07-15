@@ -6,7 +6,7 @@
 #include "stdafx.h"
 
 // The Codex library requires this assertion.
-void CodexAssert(bool condition)
+void __cdecl CodexAssert(bool condition)
 {
     condition;
     Assert(condition);

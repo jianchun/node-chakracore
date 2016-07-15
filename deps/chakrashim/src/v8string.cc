@@ -20,6 +20,22 @@
 
 #include "v8chakra.h"
 
+#ifndef Assert
+#define Assert CHAKRA_ASSERT
+#endif
+#include "Utf8Helper.h"
+
+void __cdecl CodexAssert(bool condition) {
+  Assert(condition);
+}
+
+void __cdecl CodexFailFast(bool condition) {
+  Assert(condition);
+  if (!condition) {
+    jsrt::Fatal("ChakraCore codex failure");
+  }
+}
+
 namespace v8 {
 
 using std::unique_ptr;
@@ -90,13 +106,16 @@ static int WriteRaw(
     return 0;
   }
 
-  jsrt::StringUtf8 str;
-  if (str.From(ref) != JsNoError) {
+  jsrt::StringUtf8 utf8Str;
+  if (utf8Str.From(ref) != JsNoError) {
     // error
     return 0;
   }
 
-  int stringLength = str.length();
+  // Convert to wide string
+  utf8::NarrowToWide str(utf8Str, utf8Str.length());
+
+  int stringLength = str.Length();
   if (stringLength == 0) {
     if (!(options & String::NO_NULL_TERMINATION)) {
       // include the null terminate
@@ -160,15 +179,24 @@ int String::WriteUtf8(
 
   if (length < 0) {
     // in case length was not provided we want to copy the whole string
-    length = static_cast<int>(str.length());
+    length = str.length() + 1;
   }
-  unsigned int count = length < static_cast<int>(str.length()) ?
-    length : static_cast<unsigned int>(str.length());
 
-  // CHAKRA-TODO: this is incorrect when truncating
+  int count = str.length();
+  if (count > length) {
+    // in the horrible situation in which the buffer size isn't sufficient we
+    // mimic the behavior of v8 and find the maximal number of characters that
+    // we can fit in the given buffer
+    auto maxFitChars = utf8::ByteIndexIntoCharacterIndex(
+      (LPCUTF8)(const char*)str, length,
+      utf8::DecodeOptions::doChunkedEncoding);
+    count = utf8::CharacterIndexToByteIndex(
+      (LPCUTF8)(const char*)str, str.length(), maxFitChars);
+  }
+
   memmove(buffer, str, count);
 
-  if (!(options & String::NO_NULL_TERMINATION)) {
+  if (count < length && !(options & String::NO_NULL_TERMINATION)) {
     buffer[count++] = '\0';
   }
 
@@ -186,37 +214,6 @@ Local<String> String::Empty(Isolate* isolate) {
 String* String::Cast(v8::Value *obj) {
   CHAKRA_ASSERT(obj->IsString());
   return static_cast<String*>(obj);
-}
-
-static size_t WideStrLen(const uint16_t *p)
-{
-  size_t len = 0;
-  while (*p++) {
-    len++;
-  }
-  return len;
-}
-
-template <class ToNarrow>
-MaybeLocal<String> NewFromWide(const ToNarrow& toNarrow,
-                               const uint16_t *data, int length) {
-  if (length < 0) {
-    length = static_cast<int>(WideStrLen(data));
-  }
-
-  if (length <= 0) {
-    return String::Empty(nullptr);
-  }
-
-  // xplat-todo: Implement correct utf16 -> utf8 conversion. Below is wrong,
-  // just to make simple cases working.
-  unique_ptr<char[]> str(new char[length]);
-  size_t charsWritten;
-  if (toNarrow(data, length, str.get(), length, &charsWritten) != JsNoError) {
-    return Local<String>();
-  }
-
-  return Utils::NewString(str.get(), static_cast<int>(charsWritten));
 }
 
 MaybeLocal<String> Utils::NewString(const char *data, int length) {
@@ -251,7 +248,14 @@ MaybeLocal<String> String::NewFromOneByte(Isolate* isolate,
                                           const uint8_t* data,
                                           v8::NewStringType type,
                                           int length) {
-  return Utils::NewString(reinterpret_cast<const char*>(data), length);
+  if (length < 0) {
+    length = strlen((const char*)data);
+  }
+
+  unique_ptr<uint16_t[]> wdata(new uint16_t[length]);
+  jsrt::StringConvert::CopyRaw(data, length, wdata.get(), length);
+
+  return NewFromTwoByte(isolate, wdata.get(), type, length);
 }
 
 Local<String> String::NewFromOneByte(Isolate* isolate,
@@ -267,9 +271,8 @@ MaybeLocal<String> String::NewFromTwoByte(Isolate* isolate,
                                           const uint16_t* data,
                                           v8::NewStringType type,
                                           int length) {
-  // xplat-todo: Implement correct utf16 -> utf8 conversion. Below is wrong,
-  // just to make simple cases working.
-  return NewFromWide(jsrt::StringConvert::CopyRaw<uint16_t,char>, data, length);
+  utf8::WideToNarrow str(reinterpret_cast<LPCWSTR>(data), length);
+  return NewFromUtf8(isolate, str, type, str.Length());
 }
 
 Local<String> String::NewFromTwoByte(Isolate* isolate,

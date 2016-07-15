@@ -6,12 +6,12 @@
 
 // Method is expected to be implemented to link with codex.lib
 // We have separate implementations for Chakra and IE
-void CodexAssert(bool condition)
+void __cdecl CodexAssert(bool condition)
 {
     Assert(condition);
 }
 
-void CodexFailFast(bool condition)
+void __cdecl CodexFailFast(bool condition)
 {
     Assert(condition);
     if (!condition)

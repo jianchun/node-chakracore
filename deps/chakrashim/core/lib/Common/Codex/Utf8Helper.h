@@ -74,7 +74,8 @@ namespace utf8
             return E_OUTOFMEMORY;
         }
 
-        utf8::DecodeIntoAndNullTerminate(destString, (LPCUTF8) sourceString, cchDestString);
+        utf8::DecodeIntoAndNullTerminate(destString, (LPCUTF8) sourceString, cchDestString,
+            DecodeOptions::doAllowInvalidWCHARs);
         Assert(destString[cchDestString] == 0);
         static_assert(sizeof(utf8char_t) == sizeof(char), "Needs to be valid for cast");
         *destStringPtr = destString;

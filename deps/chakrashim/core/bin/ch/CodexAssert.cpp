@@ -6,12 +6,12 @@
 #include "stdafx.h"
 
 // The Codex library requires this assertion.
-void CodexAssert(bool condition)
+void __cdecl CodexAssert(bool condition)
 {
     Assert(condition);
 }
 
-void CodexFailFast(bool condition)
+void __cdecl CodexFailFast(bool condition)
 {
     Assert(condition);
     if (!condition)

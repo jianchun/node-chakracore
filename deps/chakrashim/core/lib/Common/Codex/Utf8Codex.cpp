@@ -9,7 +9,7 @@
 #define _Analysis_assume_(expr)
 #endif
 
-extern void CodexAssert(bool condition);
+extern void __cdecl CodexAssert(bool condition);
 
 namespace utf8
 {
@@ -375,7 +375,7 @@ LSlowPath:
         }
     }
 
-    void DecodeIntoAndNullTerminate(__out_ecount(cch+1) __nullterminated char16 *buffer, LPCUTF8 ptr, size_t cch, DecodeOptions options)
+    void __cdecl DecodeIntoAndNullTerminate(__out_ecount(cch+1) __nullterminated char16 *buffer, LPCUTF8 ptr, size_t cch, DecodeOptions options)
     {
         DecodeInto(buffer, ptr, cch, options);
         buffer[cch] = 0;
@@ -480,8 +480,8 @@ LSlowPath:
             while (cch-- > 0)
             {
                 // We increment the source pointer here since at least one utf16 code unit is read here
-                // If the code unit turns out to be the high surrogate in a surrogate pair, then 
-                // EncodeTrueUtf8 will consume the low surrogate code unit too by decrementing cch 
+                // If the code unit turns out to be the high surrogate in a surrogate pair, then
+                // EncodeTrueUtf8 will consume the low surrogate code unit too by decrementing cch
                 // and incrementing source
                 dest = EncodeTrueUtf8(*source++, &source, &cch, dest);
                 if (ShouldFastPath(dest, source)) goto LFastPath;
@@ -506,7 +506,7 @@ LSlowPath:
     }
 
     __range(0, cch * 3)
-        size_t EncodeTrueUtf8IntoAndNullTerminate(__out_ecount(cch * 3 + 1) utf8char_t *buffer, __in_ecount(cch) const char16 *source, charcount_t cch)
+        size_t __cdecl EncodeTrueUtf8IntoAndNullTerminate(__out_ecount(cch * 3 + 1) utf8char_t *buffer, __in_ecount(cch) const char16 *source, charcount_t cch)
     {
         size_t result = EncodeIntoImpl<false>(buffer, source, cch);
         buffer[result] = 0;
@@ -514,7 +514,7 @@ LSlowPath:
     }
 
     // Convert the character index into a byte index.
-    size_t CharacterIndexToByteIndex(__in_ecount(cbLength) LPCUTF8 pch, size_t cbLength, charcount_t cchIndex, DecodeOptions options)
+    size_t __cdecl CharacterIndexToByteIndex(__in_ecount(cbLength) LPCUTF8 pch, size_t cbLength, charcount_t cchIndex, DecodeOptions options)
     {
         return CharacterIndexToByteIndex(pch, cbLength, cchIndex, 0, 0, options);
     }
@@ -555,7 +555,7 @@ LSlowPath:
     }
 
     // Convert byte index into character index
-    charcount_t ByteIndexIntoCharacterIndex(__in_ecount(cbIndex) LPCUTF8 pch, size_t cbIndex, DecodeOptions options)
+    charcount_t __cdecl ByteIndexIntoCharacterIndex(__in_ecount(cbIndex) LPCUTF8 pch, size_t cbIndex, DecodeOptions options)
     {
         DecodeOptions localOptions = options;
         LPCUTF8 pchCurrent = pch;

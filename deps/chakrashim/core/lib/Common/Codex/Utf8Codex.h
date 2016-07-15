@@ -77,7 +77,7 @@ inline ENUMTYPE &operator ^= (ENUMTYPE &a, ENUMTYPE b) { return (ENUMTYPE &)(((_
 
 #endif
 
-extern void CodexFailFast(bool condition);
+extern void __cdecl CodexFailFast(bool condition);
 typedef unsigned __int32 uint32;
 // charcount_t represents a count of characters in a String
 // It is unsigned and the maximum value is (INT_MAX-1)
@@ -162,7 +162,7 @@ namespace utf8
     // special cases ASCII to avoid a call the most common characters.
     LPUTF8 EncodeFull(char16 ch, __out_ecount(3) LPUTF8 ptr);
 
-    // Encode a surrogate pair into a utf8 sequence 
+    // Encode a surrogate pair into a utf8 sequence
     LPUTF8 EncodeSurrogatePair(char16 surrogateHigh, char16 surrogateLow, __out_ecount(3) LPUTF8 ptr);
 
     // Encode ch into a UTF8 sequence ignoring surrogate pairs (which are encoded as two
@@ -188,25 +188,33 @@ namespace utf8
         else if (ch < 0xD800 || (ch >= 0xE000 && ch <= 0xFFFF))
         {
             return EncodeFull(ch, ptr);
-        } 
+        }
 
         // We're now decoding a surrogate pair- any malformed input will cause us to failfast
         // We need to have at least one more character to decode here (the low surrogate)
-        CodexFailFast(*cch > 0);
+        if (*cch > 0)
+        {
+            char16 surrogateHigh = ch;
+            char16 surrogateLow = **source;
 
-        char16 surrogateHigh = ch;
-        char16 surrogateLow = **source;
+            // Validate that the surrogate code units are within the appropriate
+            // ranges for high and low surrogates
+            if (surrogateHigh >= 0xD800 && surrogateHigh <= 0xDBFF
+                && surrogateLow >= 0xDC00 && surrogateLow <= 0xDFFF)
+            {
+                // Consume the low surrogate
+                *source = *source + 1;
+                *cch = *cch - 1;
 
-        // Consume the low surrogate
-        *source = *source + 1;
-        *cch = *cch - 1;
+                return EncodeSurrogatePair(surrogateHigh, surrogateLow, ptr);
+            }
+        }
 
-        // Validate that the surrogate code units are within the appropriate 
-        // ranges for high and low surrogates
-        CodexFailFast(surrogateHigh >= 0xD800 && surrogateHigh <= 0xDBFF);
-        CodexFailFast(surrogateLow >= 0xDC00 && surrogateLow <= 0xDFFF);
-
-        return EncodeSurrogatePair(surrogateHigh, surrogateLow, ptr);
+        // ef bf bd = utf-8 representation of unicode replacement character
+        ptr[0] = 0xef;
+        ptr[1] = 0xbf;
+        ptr[2] = 0xbd;
+        return ptr + 3;
     }
 
     // Return true if ch is a lead byte of a UTF8 multi-unit sequence.
@@ -270,7 +278,7 @@ namespace utf8
     }
 
     // Like DecodeInto but ensures buffer ends with a NULL at buffer[cch].
-    void DecodeIntoAndNullTerminate(__out_ecount(cch+1) __nullterminated char16 *buffer, LPCUTF8 ptr, size_t cch, DecodeOptions options = doDefault);
+    void __cdecl DecodeIntoAndNullTerminate(__out_ecount(cch+1) __nullterminated char16 *buffer, LPCUTF8 ptr, size_t cch, DecodeOptions options = doDefault);
 
     // Decode cb bytes from ptr to into buffer returning the number of characters converted and written to buffer
     _Ret_range_(0, pbEnd - _Old_(pbUtf8))
@@ -301,15 +309,15 @@ namespace utf8
 
     // Like EncodeInto but ensures that buffer[return value] == 0.
     __range(0, cch * 3)
-    size_t EncodeTrueUtf8IntoAndNullTerminate(__out_ecount(cch * 3 + 1) utf8char_t *buffer, __in_ecount(cch) const char16 *source, charcount_t cch);
+    size_t __cdecl EncodeTrueUtf8IntoAndNullTerminate(__out_ecount(cch * 3 + 1) utf8char_t *buffer, __in_ecount(cch) const char16 *source, charcount_t cch);
 
     // Returns true if the pch refers to a UTF-16LE encoding of the given UTF-8 encoding bch.
     bool CharsAreEqual(__in_ecount(cch) LPCOLESTR pch, LPCUTF8 bch, size_t cch, DecodeOptions options = doDefault);
 
     // Convert the character index into a byte index.
     size_t CharacterIndexToByteIndex(__in_ecount(cbLength) LPCUTF8 pch, size_t cbLength, const charcount_t cchIndex, size_t cbStartIndex, charcount_t cchStartIndex, DecodeOptions options = doDefault);
-    size_t CharacterIndexToByteIndex(__in_ecount(cbLength) LPCUTF8 pch, size_t cbLength, const charcount_t cchIndex, DecodeOptions options = doDefault);
+    size_t __cdecl CharacterIndexToByteIndex(__in_ecount(cbLength) LPCUTF8 pch, size_t cbLength, const charcount_t cchIndex, DecodeOptions options = doDefault);
 
     // Convert byte index into character index
-    charcount_t ByteIndexIntoCharacterIndex(__in_ecount(cbIndex) LPCUTF8 pch, size_t cbIndex, DecodeOptions options = doDefault);
+    charcount_t __cdecl ByteIndexIntoCharacterIndex(__in_ecount(cbIndex) LPCUTF8 pch, size_t cbIndex, DecodeOptions options = doDefault);
 }

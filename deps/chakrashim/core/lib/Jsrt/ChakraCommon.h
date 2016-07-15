@@ -2638,6 +2638,114 @@ typedef unsigned char* ChakraBytePtr;
         JsStringFree(
             _In_ char* stringValue);
 
+
+
+    CHAKRA_API
+      JsCreateString(
+        const char *content,
+        size_t length,
+        _Out_ JsValueRef *value);
+
+    CHAKRA_API
+      JsCreateStringUtf8(
+        const uint8_t *content,
+        size_t length,
+        _Out_ JsValueRef *value);
+
+    CHAKRA_API
+      JsCreateStringUtf16(
+        const uint16_t *content,
+        size_t length,
+        _Out_ JsValueRef *value);
+
+
+    CHAKRA_API
+      JsWriteString(
+        JsValueRef value,
+        char* buffer,
+        _In_out_ size_t* length);
+
+    CHAKRA_API
+      JsWriteStringUtf8(
+        JsValueRef value,
+        uint8_t* buffer,
+        _In_out_ size_t* length);
+
+    CHAKRA_API
+      JsWriteStringUtf16(
+        JsValueRef value,
+        uint16_t* buffer,
+        _In_out_ size_t* length);
+
+
+
+    typedef void (CHAKRA_CALLBACK *JsDisposeExternalStringCallback)(void *callbackState);
+
+    CHAKRA_API
+      JsCreateExternalString(
+        const char *content,
+        size_t length,
+        JsDisposeExternalStringCallback disposeCallback,
+        void *callbackState,
+        _Out_ JsValueRef *value);
+
+    CHAKRA_API
+      JsGetExternalString(
+        JsValueRef value,
+        _Out_ const char **content,
+        _Out_ size_t *length);
+
+
+
+    CHAKRA_API
+      JsCompile(
+        JsValueRef script,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        JsParseScriptAttributes parseAttributes,
+        _Out_ JsValueRef *result);
+
+    CHAKRA_API
+      JsRun(
+        JsValueRef script,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        _Out_ JsValueRef *result);
+
+
+    typedef bool (CHAKRA_CALLBACK * JsSerializedLoadScriptCallback)
+      (_In_ JsSourceContext sourceContext, _Outptr_result_z_ JsValueRef *script);
+
+    CHAKRA_API
+      JsSerialize(
+        JsValueRef script,
+        _Out_writes_to_opt_(*bufferSize, *bufferSize) BYTE *buffer,
+        _Inout_ unsigned int *bufferSize);
+
+    CHAKRA_API
+      JsCompileSerialized(
+        BYTE *buffer,
+        JsSerializedLoadScriptCallback scriptLoadCallback,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        _Out_ JsValueRef * result);
+
+    CHAKRA_API
+      JsRunSerialized(
+        BYTE *buffer,
+        JsSerializedLoadScriptCallback scriptLoadCallback,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        _Out_opt_ JsValueRef * result);
+
+
+    CHAKRA_API
+      JsCreatePropertyId(
+        JsValueRef value,
+        _Out_ JsPropertyIdRef *propertyId);
+
+
+
 #ifdef _WIN32
 #include "ChakraCommonWindows.h"
 #endif // _WIN32

@@ -3514,9 +3514,9 @@ JsWriteString(
     } else {
       size_t count = min(bufferSize, strLength);
       CastCopy(str, buffer, count);
-      if (count < bufferSize) {
-        buffer[count] = 0;
-      }
+      //if (count < bufferSize) {
+      //  buffer[count] = 0;
+      //}
       if (length) {
         *length = count;
       }
@@ -3553,9 +3553,9 @@ JsWriteStringUtf8(
 
       }
       memmove(buffer, utf8Str, sizeof(uint8_t) * count);
-      if (count < bufferSize) {
-        buffer[count] = 0;
-      }
+      //if (count < bufferSize) {
+      //  buffer[count] = 0;
+      //}
       if (length) {
         *length = count;
       }
@@ -3583,9 +3583,9 @@ JsWriteStringUtf16(
     } else {
       size_t count = min(bufferSize, strLength);
       memmove(buffer, str, sizeof(char16) * count);
-      if (count < bufferSize) {
-        buffer[count] = 0;
-      }
+      //if (count < bufferSize) {
+      //  buffer[count] = 0;
+      //}
 
       if (length) {
         *length = count;

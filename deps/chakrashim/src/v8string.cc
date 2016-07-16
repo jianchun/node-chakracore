@@ -82,57 +82,6 @@ int String::Utf8Length() const {
   return str.length();
 }
 
-template <class CharType>
-static int WriteRaw(
-    JsValueRef ref, CharType* buffer, int start, int length, int options) {
-  if (length == 0) {
-    // bail out if we are required to write no chars
-    return 0;
-  }
-
-  jsrt::StringUtf8 utf8Str;
-  if (utf8Str.From(ref) != JsNoError) {
-    // error
-    return 0;
-  }
-
-  // Convert to wide string
-  utf8::NarrowToWide str(utf8Str, utf8Str.length());
-
-  int stringLength = str.Length();
-  if (stringLength == 0) {
-    if (!(options & String::NO_NULL_TERMINATION)) {
-      // include the null terminate
-      buffer[0] = L'\0';
-    }
-    return 0;
-  }
-
-  if (start < 0 || start > stringLength) {
-    // illegal bail out
-    return 0;
-  }
-
-  // in case length was not provided we want to copy the whole string
-  int count = length >= 0 ? length : stringLength;
-  count = min(count, stringLength - start);
-
-  if (length < 0) {
-    // If length was not provided, assume enough space to hold content and null
-    // terminator.
-    length = count + 1;
-  }
-
-  jsrt::StringConvert::CopyRaw(str + start, count, buffer, length);
-
-  if (count < length && !(options & String::NO_NULL_TERMINATION)) {
-    // include the null terminate
-    buffer[count++] = L'\0';
-  }
-
-  return count;
-}
-
 int String::Write(uint16_t *buffer, int start, int length, int options) const {
   if (length < 0) {
     // in case length was not provided we want to copy the whole string
@@ -140,7 +89,12 @@ int String::Write(uint16_t *buffer, int start, int length, int options) const {
   }
 
   size_t count = 0;
-  JsWriteStringUtf16((JsValueRef)this, buffer + start, length, &count);
+  if (JsWriteStringUtf16((JsValueRef)this,
+                         buffer + start, length, &count) == JsNoError) {
+    if (count < (unsigned)length && !(options & String::NO_NULL_TERMINATION)) {
+      buffer[count] = 0;
+    }
+  }
   return count;
 }
 
@@ -152,7 +106,12 @@ int String::WriteOneByte(
   }
 
   size_t count = 0;
-  JsWriteString((JsValueRef)this, (char*)buffer + start, length, &count);
+  if (JsWriteString((JsValueRef)this,
+    (char*)buffer + start, length, &count) == JsNoError) {
+    if (count < (unsigned)length && !(options & String::NO_NULL_TERMINATION)) {
+      buffer[count] = 0;
+    }
+  }
   return count;
 }
 
@@ -166,8 +125,9 @@ int String::WriteUtf8(
   size_t count = 0;
   if (JsWriteStringUtf8((JsValueRef)this,
     (uint8_t*)buffer, length, &count) == JsNoError) {
-    if (count < (unsigned)length) {
-      count++;
+    if (count < (unsigned)length && !(options & String::NO_NULL_TERMINATION)) {
+      // Utf8 version count includes null terminator
+      buffer[count++] = 0;
     }
   }
 
@@ -230,6 +190,9 @@ MaybeLocal<String> String::NewFromOneByte(Isolate* isolate,
                                           int length) {
   if (length < 0) {
     length = strlen((const char*)data);
+  } else {
+    // TODO: should we handle this in jsrt?
+    length = min(length, strlen((const char*)data));
   }
 
   JsValueRef strRef;

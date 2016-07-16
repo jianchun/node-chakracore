@@ -33,9 +33,6 @@
           'export_dependent_settings': [
             'chakracore.gyp:chakracore#host',
           ],
-          'include_dirs': [
-            'core/lib/Common/Codex',
-          ],
         }],
         [ 'OS in "linux"', {
           'cflags_cc': [ '-fexceptions' ],

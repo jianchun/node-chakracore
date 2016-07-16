@@ -43,8 +43,6 @@
 
         'chakracore_win_bin_dir':
           '<(chakra_dir)/build/vcbuild/bin/<(Platform)_$(ConfigurationName)',
-        'chakracore_win_obj_dir':
-          '<(chakra_dir)/build/vcbuild/obj/<(Platform)_$(ConfigurationName)',
         'xplat_dir': '<(chakra_dir)/BuildLinux/<(chakra_config)/lib',
 
         'conditions': [
@@ -54,7 +52,6 @@
               '<(chakracore_win_bin_dir)/chakracore.dll',
               '<(chakracore_win_bin_dir)/chakracore.pdb',
               '<(chakracore_win_bin_dir)/chakracore.lib',
-              '<(chakracore_win_obj_dir)/Chakra.Common.Codex/Chakra.Common.Codex.lib',
             ],
           }, {
             'chakracore_input': '<(chakra_dir)/build.sh',
@@ -118,7 +115,6 @@
         'conditions': [
           ['OS=="win"', {
             'libraries': [
-              '-lChakra.Common.Codex.lib',
             ],
           }, {
             'libraries': [

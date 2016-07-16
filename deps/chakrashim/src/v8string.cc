@@ -190,9 +190,6 @@ MaybeLocal<String> String::NewFromOneByte(Isolate* isolate,
                                           int length) {
   if (length < 0) {
     length = strlen((const char*)data);
-  } else {
-    // TODO: should we handle this in jsrt?
-    length = min(length, strlen((const char*)data));
   }
 
   JsValueRef strRef;

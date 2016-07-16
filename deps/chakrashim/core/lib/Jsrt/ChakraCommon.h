@@ -23,6 +23,9 @@
 #ifndef _CHAKRACOMMON_H_
 #define _CHAKRACOMMON_H_
 
+#include <stddef.h>  // for size_t
+#include <stdint.h>  // for uintptr_t
+
 // Platform specific code
 #if defined(_WIN32) && defined(_MSC_VER)
 #include <oaidl.h>
@@ -66,8 +69,6 @@ typedef BYTE* ChakraBytePtr;
 #define CHAKRA_API JsErrorCode
 #endif
 
-#include <stddef.h>  // for size_t
-#include <stdint.h>  // for uintptr_t
 typedef uintptr_t ChakraCookie;
 typedef unsigned char* ChakraBytePtr;
 #endif //  defined(_WIN32) && defined(_MSC_VER)
@@ -2663,20 +2664,22 @@ typedef unsigned char* ChakraBytePtr;
       JsWriteString(
         JsValueRef value,
         char* buffer,
-        _In_out_ size_t* length);
+        size_t bufferSize,
+        _Out_opt_ size_t* length);
 
     CHAKRA_API
       JsWriteStringUtf8(
         JsValueRef value,
         uint8_t* buffer,
-        _In_out_ size_t* length);
+        size_t bufferSize,
+        _Out_opt_ size_t* length);
 
     CHAKRA_API
       JsWriteStringUtf16(
         JsValueRef value,
         uint16_t* buffer,
-        _In_out_ size_t* length);
-
+        size_t bufferSize,
+        _Out_opt_ size_t* length);
 
 
     typedef void (CHAKRA_CALLBACK *JsDisposeExternalStringCallback)(void *callbackState);

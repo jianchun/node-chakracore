@@ -20,22 +20,6 @@
 
 #include "v8chakra.h"
 
-#ifndef Assert
-#define Assert CHAKRA_ASSERT
-#endif
-#include "Utf8Helper.h"
-
-void __cdecl CodexAssert(bool condition) {
-  Assert(condition);
-}
-
-void __cdecl CodexFailFast(bool condition) {
-  Assert(condition);
-  if (!condition) {
-    jsrt::Fatal("ChakraCore codex failure");
-  }
-}
-
 namespace v8 {
 
 using std::unique_ptr;
@@ -150,58 +134,45 @@ static int WriteRaw(
 }
 
 int String::Write(uint16_t *buffer, int start, int length, int options) const {
-  return WriteRaw(
-    (JsValueRef)this, buffer, start, length, options);
+  if (length < 0) {
+    // in case length was not provided we want to copy the whole string
+    length = INT_MAX;
+  }
+
+  size_t count = 0;
+  JsWriteStringUtf16((JsValueRef)this, buffer + start, length, &count);
+  return count;
 }
 
 int String::WriteOneByte(
     uint8_t* buffer, int start, int length, int options) const {
-  return WriteRaw(
-    (JsValueRef)this, buffer, start, length, options);
+  if (length < 0) {
+    // in case length was not provided we want to copy the whole string
+    length = INT_MAX;
+  }
+
+  size_t count = 0;
+  JsWriteString((JsValueRef)this, (char*)buffer + start, length, &count);
+  return count;
 }
 
 int String::WriteUtf8(
     char *buffer, int length, int *nchars_ref, int options) const {
-  if (nchars_ref) {
-    *nchars_ref = 0;
-  }
-
-  if (length == 0) {
-    // bail out if we are required to write no chars
-    return 0;
-  }
-
-  jsrt::StringUtf8 str;
-  if (str.From((JsValueRef)this) != JsNoError) {
-    // error
-    return 0;
-  }
-
   if (length < 0) {
     // in case length was not provided we want to copy the whole string
-    length = str.length() + 1;
+    length = INT_MAX;
   }
 
-  int count = str.length();
-  if (count > length) {
-    // in the horrible situation in which the buffer size isn't sufficient we
-    // mimic the behavior of v8 and find the maximal number of characters that
-    // we can fit in the given buffer
-    auto maxFitChars = utf8::ByteIndexIntoCharacterIndex(
-      (LPCUTF8)(const char*)str, length,
-      utf8::DecodeOptions::doChunkedEncoding);
-    count = utf8::CharacterIndexToByteIndex(
-      (LPCUTF8)(const char*)str, str.length(), maxFitChars);
+  size_t count = 0;
+  if (JsWriteStringUtf8((JsValueRef)this,
+    (uint8_t*)buffer, length, &count) == JsNoError) {
+    if (count < (unsigned)length) {
+      count++;
+    }
   }
 
-  memmove(buffer, str, count);
-
-  if (count < length && !(options & String::NO_NULL_TERMINATION)) {
-    buffer[count++] = '\0';
-  }
-
-  if (nchars_ref != nullptr) {
-    *nchars_ref = static_cast<int>(count);
+  if (nchars_ref) {
+    *nchars_ref = count;
   }
 
   return static_cast<int>(count);
@@ -233,7 +204,16 @@ MaybeLocal<String> String::NewFromUtf8(Isolate* isolate,
                                        const char* data,
                                        v8::NewStringType type,
                                        int length) {
-  return Utils::NewString(data, length);
+  if (length < 0) {
+    length = strlen((const char*)data);
+  }
+
+  JsValueRef strRef;
+  if (JsCreateStringUtf8((uint8_t*)data, length, &strRef) != JsNoError) {
+    return Local<String>();
+  }
+
+  return Local<String>::New(strRef);
 }
 
 Local<String> String::NewFromUtf8(Isolate* isolate,
@@ -252,10 +232,12 @@ MaybeLocal<String> String::NewFromOneByte(Isolate* isolate,
     length = strlen((const char*)data);
   }
 
-  unique_ptr<uint16_t[]> wdata(new uint16_t[length]);
-  jsrt::StringConvert::CopyRaw(data, length, wdata.get(), length);
+  JsValueRef strRef;
+  if (JsCreateString((const char*)data, length, &strRef) != JsNoError) {
+    return Local<String>();
+  }
 
-  return NewFromTwoByte(isolate, wdata.get(), type, length);
+  return Local<String>::New(strRef);
 }
 
 Local<String> String::NewFromOneByte(Isolate* isolate,
@@ -267,12 +249,28 @@ Local<String> String::NewFromOneByte(Isolate* isolate,
                                   length));
 }
 
+static size_t WideStrLen(const uint16_t *p) {
+  size_t len = 0;
+  while (*p++) {
+    len++;
+  }
+  return len;
+}
+
 MaybeLocal<String> String::NewFromTwoByte(Isolate* isolate,
                                           const uint16_t* data,
                                           v8::NewStringType type,
                                           int length) {
-  utf8::WideToNarrow str(reinterpret_cast<LPCWSTR>(data), length);
-  return NewFromUtf8(isolate, str, type, str.Length());
+  if (length < 0) {
+    length = WideStrLen(data);
+  }
+
+  JsValueRef strRef;
+  if (JsCreateStringUtf16(data, length, &strRef) != JsNoError) {
+    return Local<String>();
+  }
+
+  return Local<String>::New(strRef);
 }
 
 Local<String> String::NewFromTwoByte(Isolate* isolate,

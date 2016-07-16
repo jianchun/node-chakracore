@@ -26,7 +26,6 @@
 typedef uint32_t UINT32;
 typedef int64_t INT64;
 typedef void* HANDLE;
-typedef unsigned char BYTE;
 typedef UINT32 DWORD;
 #endif
 

@@ -85,7 +85,7 @@ int String::Utf8Length() const {
 int String::Write(uint16_t *buffer, int start, int length, int options) const {
   if (length < 0) {
     // in case length was not provided we want to copy the whole string
-    length = INT_MAX;
+    length = String::kMaxLength;
   }
 
   size_t count = 0;
@@ -102,7 +102,7 @@ int String::WriteOneByte(
     uint8_t* buffer, int start, int length, int options) const {
   if (length < 0) {
     // in case length was not provided we want to copy the whole string
-    length = INT_MAX;
+    length = String::kMaxLength;
   }
 
   size_t count = 0;
@@ -119,7 +119,7 @@ int String::WriteUtf8(
     char *buffer, int length, int *nchars_ref, int options) const {
   if (length < 0) {
     // in case length was not provided we want to copy the whole string
-    length = INT_MAX;
+    length = String::kMaxLength;
   }
 
   size_t count = 0;

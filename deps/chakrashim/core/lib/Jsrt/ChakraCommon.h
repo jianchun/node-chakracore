@@ -70,6 +70,7 @@ typedef BYTE* ChakraBytePtr;
 #endif
 
 typedef uintptr_t ChakraCookie;
+typedef unsigned char BYTE;
 typedef unsigned char* ChakraBytePtr;
 #endif //  defined(_WIN32) && defined(_MSC_VER)
 

@@ -3465,7 +3465,8 @@ CHAKRA_API
     return JsErrorOutOfMemory;
   }
 
-  CastCopy(content, (uint16_t*)data, length);
+  // Cast source to "unsigned" for correct cast
+  CastCopy((unsigned char*)content, (uint16_t*)data, length);
 
   return JsPointerToString(
     reinterpret_cast<const char16*>((uint16_t*)data), length, value);

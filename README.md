@@ -54,7 +54,7 @@ customizations to build and run with chakracore.
 #### How to build
 
 Prerequisites:
-* Ubuntu 16.04 LTS x64.
+* Ubuntu 16.04 LTS x64
 
 Install building tools and ChakraCore dependencies:
 

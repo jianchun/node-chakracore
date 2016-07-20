@@ -53,6 +53,24 @@ customizations to build and run with chakracore.
 
 #### How to build
 
+Prerequisites:
+* Ubuntu 16.04 LTS x64.
+
+Install [ChakraCore dependencies]
+(https://github.com/Microsoft/ChakraCore/wiki/Building-ChakraCore#linux).
+
+```
+sudo apt-get install -y build-essential cmake clang uuid-dev libunwind-dev libicu-dev liblttng-ust-dev
+```
+
+Clone this repo and check out `xplat` branch.
+
+```
+git checkout xplat
+```
+
+Build:
+
 ```
 configure --engine=chakracore
 make
@@ -60,12 +78,15 @@ make
 
 #### How to test
 
+To test if Node.js was built correctly with ChakraCore:
+
 ```
 $ node -e "console.log('Hello from Node.js ' + process.jsEngine)"
 Hello from Node.js chakracore
 ```
 
 To run unit tests:
+
 ```
 $ make test
 ```

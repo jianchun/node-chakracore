@@ -56,14 +56,13 @@ customizations to build and run with chakracore.
 Prerequisites:
 * Ubuntu 16.04 LTS x64.
 
-Install [ChakraCore dependencies]
-(https://github.com/Microsoft/ChakraCore/wiki/Building-ChakraCore#linux).
+Install building tools and ChakraCore dependencies:
 
 ```
 sudo apt-get install -y build-essential cmake clang uuid-dev libunwind-dev libicu-dev liblttng-ust-dev
 ```
 
-Clone this repo and check out `xplat` branch.
+Clone this repo and check out `xplat` branch:
 
 ```
 git checkout xplat

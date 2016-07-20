@@ -72,8 +72,9 @@ git checkout xplat
 Build:
 
 ```
-configure --engine=chakracore
+./configure --engine=chakracore
 make
+[sudo] make install
 ```
 
 #### How to test

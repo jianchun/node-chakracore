@@ -115,6 +115,8 @@
         'library_dirs': [ '<(PRODUCT_DIR)' ],
         'conditions': [
           ['OS=="win"', {
+            'libraries': [
+            ],
           }, {
             'libraries': [
               '-Wl,--no-undefined',

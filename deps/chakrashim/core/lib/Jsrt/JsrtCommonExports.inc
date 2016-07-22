@@ -11,7 +11,6 @@
     JsGetContextData
     JsSetContextData
     JsRunScript
-    JsExperimentalApiRunModule
     JsGetUndefinedValue
     JsGetNullValue
     JsGetTrueValue
@@ -107,7 +106,6 @@
     JsRunScriptUtf8
     JsSerializeScriptUtf8
     JsRunSerializedScriptUtf8
-    JsExperimentalApiRunModuleUtf8
     JsGetPropertyIdFromNameUtf8
     JsStringFree
     JsDiagEvaluateUtf8
@@ -116,3 +114,9 @@
     JsStringToPointerUtf8Copy
     JsPointerToStringUtf8
     JsGetPropertyNameFromIdUtf8Copy
+    JsCreateString
+    JsCreateStringUtf8
+    JsCreateStringUtf16
+    JsWriteString
+    JsWriteStringUtf8
+    JsWriteStringUtf16

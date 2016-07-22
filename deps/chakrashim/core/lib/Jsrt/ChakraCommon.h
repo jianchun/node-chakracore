@@ -48,6 +48,7 @@ typedef BYTE* ChakraBytePtr;
 #define _Pre_writable_byte_size_(byteLength)
 #define _Outptr_result_buffer_(byteLength)
 #define _Outptr_result_bytebuffer_(byteLength)
+#define _Outptr_result_maybenull_
 #define _Outptr_result_z_
 #define _Ret_maybenull_
 #define _Out_writes_(size)
@@ -70,6 +71,16 @@ typedef BYTE* ChakraBytePtr;
 #include <stdint.h>  // for uintptr_t
 typedef uintptr_t ChakraCookie;
 typedef unsigned char* ChakraBytePtr;
+
+// xplat-todo: try reduce usage of following types
+#if !defined(__MSTYPES_DEFINED)
+typedef uint32_t UINT32;
+typedef int64_t INT64;
+typedef void* HANDLE;
+typedef unsigned char BYTE;
+typedef UINT32 DWORD;
+#endif
+
 #endif //  defined(_WIN32) && defined(_MSC_VER)
 
     /// <summary>
@@ -186,7 +197,22 @@ typedef unsigned char* ChakraBytePtr;
         ///     The error code is returned by existing JsGetPropertyNamefromId if the function is called with non-string property id.
         /// </summary>
         JsErrorPropertyNotString,
-
+        /// <summary>
+        ///     Module evaulation is called in wrong context.
+        /// </summary>
+        JsErrorInvalidContext,
+        /// <summary>
+        ///     Module evaulation is called in wrong context.
+        /// </summary>
+        JsInvalidModuleHostInfoKind,
+        /// <summary>
+        ///     Module was parsed already when JsParseModuleSource is called.
+        /// </summary>
+        JsErrorModuleParsed,
+        /// <summary>
+        ///     Module was evaluated already when JsModuleEvaluation is called.
+        /// </summary>
+        JsErrorModuleEvaluated,
         /// <summary>
         ///     Category of errors that relates to errors occurring within the engine itself.
         /// </summary>
@@ -195,6 +221,10 @@ typedef unsigned char* ChakraBytePtr;
         ///     The Chakra engine has run out of memory.
         /// </summary>
         JsErrorOutOfMemory,
+        /// <summary>
+        ///     The Chakra engine failed to set the Floating Point Unit state.
+        /// </summary>
+        JsErrorBadFPUState,
 
         /// <summary>
         ///     Category of errors that relates to errors in a script.
@@ -1068,28 +1098,6 @@ typedef unsigned char* ChakraBytePtr;
     /// </returns>
     CHAKRA_API
         JsRunScriptUtf8(
-            _In_z_ const char *script,
-            _In_ JsSourceContext sourceContext,
-            _In_z_ const char *sourceUrl,
-            _Out_ JsValueRef *result);
-
-    /// <summary>
-    ///     Executes a module.
-    /// </summary>
-    /// <remarks>
-    ///     Requires an active script context.
-    /// </remarks>
-    /// <param name="script">The module script to parse and execute, encoded as utf8.</param>
-    /// <param name="sourceContext">
-    ///     A cookie identifying the script that can be used by debuggable script contexts.
-    /// </param>
-    /// <param name="sourceUrl">The location the module script came from, encoded as utf8.</param>
-    /// <param name="result">The result of executing the module script, if any. This parameter can be null.</param>
-    /// <returns>
-    ///     The code <c>JsNoError</c> if the operation succeeded, a failure code otherwise.
-    /// </returns>
-    CHAKRA_API
-        JsExperimentalApiRunModuleUtf8(
             _In_z_ const char *script,
             _In_ JsSourceContext sourceContext,
             _In_z_ const char *sourceUrl,
@@ -2637,6 +2645,115 @@ typedef unsigned char* ChakraBytePtr;
     CHAKRA_API
         JsStringFree(
             _In_ char* stringValue);
+
+    // -------------- Exp new String APIs ------------------------------------
+
+    CHAKRA_API
+      JsCreateString(
+        const char *content,
+        size_t length,
+        _Out_ JsValueRef *value);
+
+    CHAKRA_API
+      JsCreateStringUtf8(
+        const uint8_t *content,
+        size_t length,
+        _Out_ JsValueRef *value);
+
+    CHAKRA_API
+      JsCreateStringUtf16(
+        const uint16_t *content,
+        size_t length,
+        _Out_ JsValueRef *value);
+
+
+    CHAKRA_API
+      JsWriteString(
+        JsValueRef value,
+        char* buffer,
+        size_t bufferSize,
+        _Out_opt_ size_t* length);
+
+    CHAKRA_API
+      JsWriteStringUtf8(
+        JsValueRef value,
+        uint8_t* buffer,
+        size_t bufferSize,
+        _Out_opt_ size_t* length);
+
+    CHAKRA_API
+      JsWriteStringUtf16(
+        JsValueRef value,
+        uint16_t* buffer,
+        size_t bufferSize,
+        _Out_opt_ size_t* length);
+
+
+    typedef void (CHAKRA_CALLBACK *JsDisposeExternalStringCallback)(void *callbackState);
+
+    CHAKRA_API
+      JsCreateExternalString(
+        const char *content,
+        size_t length,
+        JsDisposeExternalStringCallback disposeCallback,
+        void *callbackState,
+        _Out_ JsValueRef *value);
+
+    CHAKRA_API
+      JsGetExternalString(
+        JsValueRef value,
+        _Out_ const char **content,
+        _Out_ size_t *length);
+
+
+
+    CHAKRA_API
+      JsCompile(
+        JsValueRef script,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        JsParseScriptAttributes parseAttributes,
+        _Out_ JsValueRef *result);
+
+    CHAKRA_API
+      JsRun(
+        JsValueRef script,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        _Out_ JsValueRef *result);
+
+
+    typedef bool (CHAKRA_CALLBACK * JsSerializedLoadScriptCallback)
+      (_In_ JsSourceContext sourceContext, _Outptr_result_z_ JsValueRef *script);
+
+    CHAKRA_API
+      JsSerialize(
+        JsValueRef script,
+        _Out_writes_to_opt_(*bufferSize, *bufferSize) BYTE *buffer,
+        _Inout_ unsigned int *bufferSize);
+
+    CHAKRA_API
+      JsCompileSerialized(
+        BYTE *buffer,
+        JsSerializedLoadScriptCallback scriptLoadCallback,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        _Out_ JsValueRef * result);
+
+    CHAKRA_API
+      JsRunSerialized(
+        BYTE *buffer,
+        JsSerializedLoadScriptCallback scriptLoadCallback,
+        JsSourceContext sourceContext,
+        const char *sourceUrl,
+        _Out_opt_ JsValueRef * result);
+
+
+    CHAKRA_API
+      JsCreatePropertyId(
+        JsValueRef value,
+        _Out_ JsPropertyIdRef *propertyId);
+
 
 #ifdef _WIN32
 #include "ChakraCommonWindows.h"

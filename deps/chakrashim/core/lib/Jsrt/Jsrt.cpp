@@ -3420,15 +3420,6 @@ CHAKRA_API JsRunSerializedScriptUtf8(
         buffer, sourceContext, url, false, result);
 }
 
-CHAKRA_API JsExperimentalApiRunModuleUtf8(
-    _In_z_ const char *script,
-    _In_ JsSourceContext sourceContext,
-    _In_z_ const char *sourceUrl,
-    _Out_ JsValueRef *result)
-{
-    return RunScriptCore(-1, script, sourceContext, sourceUrl, false, JsParseScriptAttributeNone, true, result);
-}
-
 CHAKRA_API JsStringFree(_In_ char* stringValue)
 {
     if (stringValue == nullptr)
@@ -3441,6 +3432,162 @@ CHAKRA_API JsStringFree(_In_ char* stringValue)
 
     return JsNoError;
 }
+
+
+// ---------------- Exp new String APIs ----------------------------------------
+
+template <class SrcChar, class DstChar>
+static void CastCopy(const SrcChar* src, DstChar* dst, size_t count) {
+  const SrcChar* end = src + count;
+  while (src < end) {
+    *dst++ = static_cast<DstChar>(*src++);
+  }
+}
+
+CHAKRA_API
+  JsCreateString(
+    const char *content,
+    size_t length,
+    _Out_ JsValueRef *value) {
+  PARAM_NOT_NULL(content);
+
+  AutoArrayPtr<uint16_t> data(HeapNewNoThrowArray(uint16_t, length), length);
+  if (!data) {
+    return JsErrorOutOfMemory;
+  }
+
+  // Cast source to "unsigned" for correct cast
+  CastCopy((unsigned char*)content, (uint16_t*)data, length);
+
+  return JsPointerToString(
+    reinterpret_cast<const char16*>((uint16_t*)data), length, value);
+}
+
+CHAKRA_API
+  JsCreateStringUtf8(
+    const uint8_t *content,
+    size_t length,
+    _Out_ JsValueRef *value)
+{
+  PARAM_NOT_NULL(content);
+  utf8::NarrowToWide wstr((LPCSTR)content, length);
+  if (!wstr) {
+    return JsErrorOutOfMemory;
+  }
+
+  return JsPointerToString(wstr, wstr.Length(), value);
+}
+
+CHAKRA_API
+  JsCreateStringUtf16(
+    const uint16_t *content,
+    size_t length,
+    _Out_ JsValueRef *value)
+{
+  return JsPointerToString(reinterpret_cast<const char16*>(content), length, value);
+}
+
+
+CHAKRA_API
+JsWriteString(
+  JsValueRef value,
+  char* buffer,
+  size_t bufferSize,
+  _Out_opt_ size_t* length)
+{
+  const char16* str = nullptr;
+  size_t strLength = 0;
+  JsErrorCode errorCode = JsStringToPointer(value, &str, &strLength);
+  if (errorCode == JsNoError) {
+    if (!buffer) {
+      if (length) {
+        *length = strLength;
+      }
+    } else {
+      size_t count = min(bufferSize, strLength);
+      CastCopy(str, buffer, count);
+      //if (count < bufferSize) {
+      //  buffer[count] = 0;
+      //}
+      if (length) {
+        *length = count;
+      }
+    }
+  }
+
+  return errorCode;
+}
+
+CHAKRA_API
+JsWriteStringUtf8(
+  JsValueRef value,
+  uint8_t* buffer,
+  size_t bufferSize,
+  _Out_opt_ size_t* length)
+{
+  const char16* str = nullptr;
+  size_t strLength = 0;
+  JsErrorCode errorCode = JsStringToPointer(value, &str, &strLength);
+  if (errorCode == JsNoError) {
+    utf8::WideToNarrow utf8Str(str, strLength);
+    if (!buffer) {
+      if (length) {
+        *length = utf8Str.Length();
+      }
+    } else {
+      size_t count = min(bufferSize, utf8Str.Length());
+      if (count < utf8Str.Length()) {
+        auto maxFitChars = utf8::ByteIndexIntoCharacterIndex(
+          (LPCUTF8)(const char*)utf8Str, count,
+          utf8::DecodeOptions::doChunkedEncoding);
+        count = utf8::CharacterIndexToByteIndex(
+          (LPCUTF8)(const char*)utf8Str, utf8Str.Length(), maxFitChars);
+
+      }
+      memmove(buffer, utf8Str, sizeof(uint8_t) * count);
+      //if (count < bufferSize) {
+      //  buffer[count] = 0;
+      //}
+      if (length) {
+        *length = count;
+      }
+    }
+  }
+
+  return errorCode;
+}
+
+CHAKRA_API
+JsWriteStringUtf16(
+  JsValueRef value,
+  uint16_t* buffer,
+  size_t bufferSize,
+  _Out_opt_ size_t* length)
+{
+  const char16* str = nullptr;
+  size_t strLength = 0;
+  JsErrorCode errorCode = JsStringToPointer(value, &str, &strLength);
+  if (errorCode == JsNoError) {
+    if (!buffer) {
+      if (length) {
+        *length = strLength;
+      }
+    } else {
+      size_t count = min(bufferSize, strLength);
+      memmove(buffer, str, sizeof(char16) * count);
+      //if (count < bufferSize) {
+      //  buffer[count] = 0;
+      //}
+
+      if (length) {
+        *length = count;
+      }
+    }
+  }
+
+  return errorCode;
+}
+
 
 /////////////////////
 

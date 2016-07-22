@@ -35,6 +35,7 @@
 
       'variables': {
         'chakracore_header': [
+          '<(chakra_dir)/lib/Common/ChakraCoreVersion.h',
           '<(chakra_dir)/lib/Jsrt/ChakraCore.h',
           '<(chakra_dir)/lib/Jsrt/ChakraCommon.h',
           '<(chakra_dir)/lib/Jsrt/ChakraCommonWindows.h',
@@ -114,6 +115,8 @@
         'library_dirs': [ '<(PRODUCT_DIR)' ],
         'conditions': [
           ['OS=="win"', {
+            'libraries': [
+            ],
           }, {
             'libraries': [
               '-Wl,--no-undefined',

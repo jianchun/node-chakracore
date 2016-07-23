@@ -3492,12 +3492,19 @@ CHAKRA_API JsCreateStringUtf16(
 }
 
 
-CHAKRA_API JsWriteString(
+template <class CopyFunc>
+JsErrorCode WriteStringCopy(
     JsValueRef value,
-    char* buffer,
-    size_t bufferSize,
-    _Out_opt_ size_t* length)
+    int start,
+    int length,
+    _Out_opt_ size_t* written,
+    const CopyFunc& copyFunc)
 {
+    if (written)
+    {
+        *written = 0;  // init to 0 for default
+    }
+
     const char16* str = nullptr;
     size_t strLength = 0;
     JsErrorCode errorCode = JsStringToPointer(value, &str, &strLength);
@@ -3506,24 +3513,61 @@ CHAKRA_API JsWriteString(
         return errorCode;
     }
 
-    if (!buffer)
+    if (start < 0 || (size_t)start > strLength)
     {
-        if (length)
-        {
-            *length = strLength;
-        }
+        return JsNoError;  // start out of range, no chars written
     }
-    else
+
+    size_t count = min(static_cast<size_t>(length), strLength - start);
+    if (count == 0)
     {
-        size_t count = min(bufferSize, strLength);
-        CastCopy(str, buffer, count);
-        if (length)
-        {
-            *length = count;
-        }
+        return JsNoError;  // no chars written
+    }
+
+    errorCode = copyFunc(str + start, count);
+    if (errorCode != JsNoError)
+    {
+        return errorCode;
+    }
+
+    if (written)
+    {
+        *written = count;
     }
 
     return JsNoError;
+}
+
+CHAKRA_API JsWriteString(
+    JsValueRef value,
+    int start,
+    int length,
+    char* buffer,
+    _Out_opt_ size_t* written)
+{
+    return WriteStringCopy(value, start, length, written,
+        [buffer](const char16* src, size_t count)
+        {
+            PARAM_NOT_NULL(buffer);
+            CastCopy(src, buffer, count);
+            return JsNoError;
+        });
+}
+
+CHAKRA_API JsWriteStringUtf16(
+    JsValueRef value,
+    int start,
+    int length,
+    uint16_t* buffer,
+    _Out_opt_ size_t* written)
+{
+    return WriteStringCopy(value, start, length, written,
+        [buffer](const char16* src, size_t count)
+        {
+            PARAM_NOT_NULL(buffer);
+            memmove(buffer, src, sizeof(char16) * count);
+            return JsNoError;
+        });
 }
 
 CHAKRA_API JsWriteStringUtf8(
@@ -3561,40 +3605,6 @@ CHAKRA_API JsWriteStringUtf8(
                 (LPCUTF8)(const char*)utf8Str, utf8Str.Length(), maxFitChars);
         }
         memmove(buffer, utf8Str, sizeof(uint8_t) * count);
-        if (length)
-        {
-            *length = count;
-        }
-    }
-
-    return JsNoError;
-}
-
-CHAKRA_API JsWriteStringUtf16(
-    JsValueRef value,
-    uint16_t* buffer,
-    size_t bufferSize,
-    _Out_opt_ size_t* length)
-{
-    const char16* str = nullptr;
-    size_t strLength = 0;
-    JsErrorCode errorCode = JsStringToPointer(value, &str, &strLength);
-    if (errorCode != JsNoError)
-    {
-        return errorCode;
-    }
-
-    if (!buffer)
-    {
-        if (length)
-        {
-            *length = strLength;
-        }
-    }
-    else
-    {
-        size_t count = min(bufferSize, strLength);
-        memmove(buffer, str, sizeof(char16) * count);
         if (length)
         {
             *length = count;

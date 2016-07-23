@@ -83,15 +83,10 @@ int String::Utf8Length() const {
 }
 
 int String::Write(uint16_t *buffer, int start, int length, int options) const {
-  if (length < 0) {
-    // in case length was not provided we want to copy the whole string
-    length = String::kMaxLength;
-  }
-
   size_t count = 0;
-  if (JsWriteStringUtf16((JsValueRef)this,
-                         buffer + start, length, &count) == JsNoError) {
-    if (count < (unsigned)length && !(options & String::NO_NULL_TERMINATION)) {
+  if (JsWriteStringUtf16((JsValueRef)this, start, length,
+                         buffer, &count) == JsNoError) {
+    if (!(options & String::NO_NULL_TERMINATION)) {
       buffer[count] = 0;
     }
   }
@@ -100,15 +95,10 @@ int String::Write(uint16_t *buffer, int start, int length, int options) const {
 
 int String::WriteOneByte(
     uint8_t* buffer, int start, int length, int options) const {
-  if (length < 0) {
-    // in case length was not provided we want to copy the whole string
-    length = String::kMaxLength;
-  }
-
   size_t count = 0;
-  if (JsWriteString((JsValueRef)this,
-    (char*)buffer + start, length, &count) == JsNoError) {
-    if (count < (unsigned)length && !(options & String::NO_NULL_TERMINATION)) {
+  if (JsWriteString((JsValueRef)this, start, length,
+                    (char*)buffer, &count) == JsNoError) {
+    if (!(options & String::NO_NULL_TERMINATION)) {
       buffer[count] = 0;
     }
   }

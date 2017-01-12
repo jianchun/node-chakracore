@@ -71,7 +71,7 @@ MaybeLocal<Script> Script::Compile(Local<Context> context,
   if (origin != nullptr) {
     filenameRef = *origin->ResourceName();
   } else {
-    error = JsCreateStringUtf8((uint8_t*)filename,
+    error = JsCreateString(filename,
                                strlen(filename),
                                &filenameRef);
   }
@@ -203,13 +203,13 @@ Local<Script> UnboundScript::BindToCurrentContext() {
 
   JsValueRef sourceRef;
 
-  if (JsCreateStringUtf8((uint8_t*)(*source), source.length(),
+  if (JsCreateString(*source, source.length(),
                          &sourceRef) != JsNoError) {
     return Local<Script>();
   }
 
   JsValueRef filenameRef;
-  if (JsCreateStringUtf8((uint8_t*)(*filename), filename.length(),
+  if (JsCreateString(*filename, filename.length(),
                             &filenameRef) != JsNoError) {
     return Local<Script>();
   }

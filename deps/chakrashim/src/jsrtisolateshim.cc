@@ -129,7 +129,7 @@ JsTTDStreamHandle TTDHostOpen(const TTDHostCharType* path, bool isWrite) {
 #define MAX_PATH 256
 #define MAXDWORD 0xffffffff
 #define memcpy_s(DST, DSTLENGTH, SRC, COUNT) memcpy(DST, SRC, COUNT)
-#define CALLBACK 
+#define CALLBACK
 
 typedef char TTDHostCharType;
 typedef struct dirent* TTDHostFileInfo;
@@ -182,7 +182,7 @@ void TTDHostAppendAscii(TTDHostCharType* dst, const char* src) {
     dst[dpos + srcLength] = '\0';
 }
 
-void TTDHostBuildCurrentExeDirectory(TTDHostCharType* path, 
+void TTDHostBuildCurrentExeDirectory(TTDHostCharType* path,
     size_t pathBufferLength) {
     TTDHostCharType exePath[MAX_PATH];
     // TODO: xplattodo move this logic to PAL
@@ -497,7 +497,7 @@ IsolateShim::~IsolateShim() {
                                        nullptr, &runtime);
     } else {
       error = JsTTDCreateReplayRuntime(attributes, ttUri, ttUriByteLength,
-                                       doDebug, 
+                                       doDebug,
                                        &TTInitializeForWriteLogStreamCallback,
                                        &TTCreateStreamCallback,
                                        &TTReadBytesFromStreamCallback,
@@ -616,7 +616,7 @@ bool IsolateShim::NewContext(JsContextRef * context, bool exposeGC,
                              bool useGlobalTTState,
                              JsValueRef globalObjectTemplateInstance) {
   ContextShim * contextShim = ContextShim::New(this, exposeGC,
-                                               useGlobalTTState, 
+                                               useGlobalTTState,
                                                globalObjectTemplateInstance);
   if (contextShim == nullptr) {
     return false;
@@ -883,7 +883,9 @@ bool IsolateShim::RunSingleStepOfReverseMoveLoop(v8::Isolate* isolate,
                      ~JsTTDMoveMode::JsTTDMoveScanIntervalForContinue);
     }
 
+    uint32_t kthEvent = (uint32_t)(_moveMode >> 32);
     JsErrorCode error = JsTTDGetSnapTimeTopLevelEventMove(rHandle, _moveMode,
+                                                          kthEvent,
                                                           nextEventTime,
                                                           &snapEventTime,
                                                           &snapEventEndTime);

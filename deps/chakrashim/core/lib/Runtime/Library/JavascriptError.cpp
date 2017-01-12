@@ -320,6 +320,10 @@ namespace Js
           return CreateReferenceError(scriptContext);
         case kjstURIError:
           return CreateURIError(scriptContext);
+        case kjstWebAssemblyCompileError:
+          return CreateWebAssemblyCompileError(scriptContext);
+        case kjstWebAssemblyRuntimeError:
+          return CreateWebAssemblyRuntimeError(scriptContext);
         default:
             AssertMsg(FALSE, "Invalid error type");
             __assume(false);
@@ -367,7 +371,9 @@ namespace Js
 
         if (FACILITY_CONTROL == HRESULT_FACILITY(hr) || FACILITY_JSCRIPT == HRESULT_FACILITY(hr))
         {
+#if !(defined(_M_ARM) && defined(__clang__))
             if (argList != nullptr)
+#endif
             {
                 HRESULT hrAdjusted = GetAdjustedResourceStringHr(hr, /* isFormatString */ true);
 
@@ -776,6 +782,10 @@ namespace Js
         case kjstURIError:
             jsNewError = targetJavascriptLibrary->CreateURIError();
             break;
+        case kjstWebAssemblyCompileError:
+            jsNewError = targetJavascriptLibrary->CreateWebAssemblyCompileError();
+        case kjstWebAssemblyRuntimeError:
+            jsNewError = targetJavascriptLibrary->CreateWebAssemblyRuntimeError();
 
         case kjstCustomError:
         default:

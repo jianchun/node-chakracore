@@ -7,6 +7,15 @@
 
 // We need real JITManager code when on _WIN32 or explict ENABLE_OOP_NATIVE_CODEGEN.
 // Otherwise we use a dummy JITManager which disables OOP JIT to reduce code noise.
+
+enum class RemoteCallType
+{
+    CodeGen,
+    ThunkCreation,
+    HeapQuery,
+    StateUpdate
+};
+
 #if _WIN32 || ENABLE_OOP_NATIVE_CODEGEN
 class JITManager
 {
@@ -20,6 +29,7 @@ public:
     void EnableOOPJIT();
 
     HANDLE GetJITTargetHandle() const;
+    HANDLE GetServerHandle() const;
 
     HRESULT InitializeThreadContext(
         __in ThreadContextDataIDL * data,
@@ -35,8 +45,8 @@ public:
 
     HRESULT NewInterpreterThunkBlock(
         __in PSCRIPTCONTEXT_HANDLE scriptContextInfoAddress,
-        __in boolean asmJsThunk,
-        __out InterpreterThunkInfoIDL * thunkInfo);
+        __in InterpreterThunkInputIDL * thunkInput,
+        __out InterpreterThunkOutputIDL * thunkOutput);
 
     HRESULT AddDOMFastPathHelper(
         __in PSCRIPTCONTEXT_HANDLE scriptContextInfoAddress,
@@ -83,19 +93,11 @@ public:
         __in PSCRIPTCONTEXT_HANDLE scriptContextInfoAddress,
         __out JITOutputIDL *jitData);
 
-#if DBG
-    HRESULT IsInterpreterThunkAddr(
-        __in PSCRIPTCONTEXT_HANDLE scriptContextInfoAddress,
-        __in intptr_t address,
-        __in boolean asmjsThunk,
-        __out boolean * result);
-#endif
-
     HRESULT Shutdown();
 
 
     static JITManager * GetJITManager();
-    static void HandleServerCallResult(HRESULT hr);
+    static void HandleServerCallResult(HRESULT hr, RemoteCallType callType);
 private:
     JITManager();
     ~JITManager();
@@ -108,6 +110,7 @@ private:
 
     RPC_BINDING_HANDLE m_rpcBindingHandle;
     HANDLE m_targetHandle;
+    HANDLE m_serverHandle;
     UUID m_jitConnectionId;
     bool m_oopJitEnabled;
     bool m_isJITServer;
@@ -131,6 +134,10 @@ public:
 
     HANDLE GetJITTargetHandle() const
         { Assert(false); return HANDLE(); }
+    HANDLE GetServerHandle() const
+    {
+        Assert(false); return HANDLE();
+    }
 
     HRESULT InitializeThreadContext(
         __in ThreadContextDataIDL * data,
@@ -208,7 +215,7 @@ public:
 
     static JITManager * GetJITManager()
         { return &s_jitManager; }
-    static void HandleServerCallResult(HRESULT hr);
+    static void HandleServerCallResult(HRESULT hr, RemoteCallType callType) { Assert(UNREACHED); }
 
 private:
     static JITManager s_jitManager;

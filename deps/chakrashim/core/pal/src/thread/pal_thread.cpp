@@ -9,7 +9,6 @@
 #include "pal/mutex.hpp"
 #include "pal/handlemgr.hpp"
 #include "pal/cs.hpp"
-#include "pal/seh.hpp"
 
 #include "procprivate.hpp"
 #include "pal/process.h"
@@ -1058,8 +1057,6 @@ CorUnix::InternalEndCurrentThread(
         PROCRemoveThread(pThread, pThread);
 
 #ifdef FEATURE_PAL_SXS
-        // Ensure that EH is disabled on the current thread
-        SEHDisable(pThread);
         PAL_Leave(PAL_BoundaryTop);
 #endif // FEATURE_PAL_SXS
 
@@ -2311,15 +2308,6 @@ CPalThread::RunPostCreateInitializers(
         goto RunPostCreateInitializersExit;
     }
 
-#ifdef FEATURE_PAL_SXS
-    _ASSERTE(m_fInPal);
-    palError = SEHEnable(this);
-    if (NO_ERROR != palError)
-    {
-        goto RunPostCreateInitializersExit;
-    }
-#endif // FEATURE_PAL_SXS
-
 RunPostCreateInitializersExit:
 
     return palError;
@@ -2898,15 +2886,7 @@ bool IsAddressOnStack(ULONG_PTR address)
         s_cachedThreadStackHighLimit = highLimit;
     }
 
-    ULONG_PTR currentStackPtr = 0;
-
-#ifdef _AMD64_
-    asm("mov %%rsp, %0;":"=r"(currentStackPtr));
-#elif defined(__i686__)
-    asm("mov %%esp, %0;":"=r"(currentStackPtr));
-#else
-#error "Implement this!!"
-#endif
+    ULONG_PTR currentStackPtr = GetCurrentSP();
 
     if (currentStackPtr <= address && address < s_cachedThreadStackHighLimit)
     {

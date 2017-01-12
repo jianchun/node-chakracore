@@ -23,7 +23,6 @@ Abstract:
 #include "pal/cs.hpp"
 #include "pal/malloc.hpp"
 #include "pal/file.hpp"
-#include "pal/seh.hpp"
 #include "pal/dbgmsg.h"
 #include "pal/virtual.h"
 #include "pal/map.h"
@@ -2017,7 +2016,7 @@ VirtualProtect(
             if ( !VIRTUALIsPageCommitted( Index, pEntry ) )
             {
                 ERROR( "You can only change the protection attributes"
-                       " on committed memory.\n" )
+                       " on committed memory.\n" );
                 SetLastError( ERROR_INVALID_ADDRESS );
                 goto ExitVirtualProtect;
             }
@@ -2355,48 +2354,6 @@ ExitVirtualQuery:
     LOGEXIT( "VirtualQuery returning %d.\n", sizeof( *lpBuffer ) );
     PERF_EXIT(VirtualQuery);
     return sizeof( *lpBuffer );
-}
-
-/*++
-Function:
-  GetWriteWatch
-
-See MSDN doc.
---*/
-UINT
-PALAPI
-GetWriteWatch(
-  IN DWORD dwFlags,
-  IN PVOID lpBaseAddress,
-  IN SIZE_T dwRegionSize,
-  OUT PVOID *lpAddresses,
-  IN OUT PULONG_PTR lpdwCount,
-  OUT PULONG lpdwGranularity
-)
-{
-    // TODO: implement this method
-    *lpAddresses = NULL;
-    *lpdwCount = 0;
-    // Until it is implemented, return non-zero value as an indicator of failure
-    return 1;
-}
-
-/*++
-Function:
-  ResetWriteWatch
-
-See MSDN doc.
---*/
-UINT
-PALAPI
-ResetWriteWatch(
-  IN LPVOID lpBaseAddress,
-  IN SIZE_T dwRegionSize
-)
-{
-    // TODO: implement this method
-    // Until it is implemented, return non-zero value as an indicator of failure
-    return 1;
 }
 
 /*++

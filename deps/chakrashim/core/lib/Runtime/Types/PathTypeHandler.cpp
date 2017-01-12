@@ -320,7 +320,7 @@ namespace Js
 #endif
         // Move all current inline slots up to object header inline offset
         Var *const oldInlineSlots = reinterpret_cast<Var *>(reinterpret_cast<uintptr_t>(object) + this->GetOffsetOfInlineSlots());
-        Var *const newInlineSlots = reinterpret_cast<Var *>(reinterpret_cast<uintptr_t>(object) + this->GetOffsetOfObjectHeaderInlineSlots());
+        Field(Var) *const newInlineSlots = reinterpret_cast<Field(Var) *>(reinterpret_cast<uintptr_t>(object) + this->GetOffsetOfObjectHeaderInlineSlots());
 
         PHASE_PRINT_TRACE1(ObjectHeaderInliningPhase, _u("ObjectHeaderInlining: Re-optimizing the object. Moving auxSlots properties to ObjectHeader.\n"));
 
@@ -1051,7 +1051,7 @@ namespace Js
 #endif
             for (uint i = 0; i < count; i++)
             {
-                PathTypeHandlerBase *pathHandler = (PathTypeHandlerBase *)type->typeHandler;
+                PathTypeHandlerBase *pathHandler = (PathTypeHandlerBase *)PointerValue(type->typeHandler);
                 Js::PropertyId propertyId = propIds->elements[i];
 
                 PropertyIndex propertyIndex = pathHandler->GetPropertyIndex(propertyId);
@@ -1519,8 +1519,7 @@ namespace Js
                                             DynamicTypeHandler::RoundUpInlineSlotCapacity(requestedInlineSlotCapacity));
         ScriptContext* scriptContext = instance->GetScriptContext();
         DynamicType* cachedDynamicType = nullptr;
-        BOOL isJsrtExternalType = instance->GetType()->IsJsrtExternal();
-        DynamicType* oldType = isJsrtExternalType ? 0 : instance->GetDynamicType();
+        DynamicType* oldType = instance->GetDynamicType();
 
         bool useCache = instance->GetScriptContext() == newPrototype->GetScriptContext();
 
@@ -1530,14 +1529,12 @@ namespace Js
         char16 reason[1024];
         swprintf_s(reason, 1024, _u("Cache not populated."));
 #endif
-        AssertMsg(isJsrtExternalType || typeid(DynamicType) == typeid(*oldType), "PathTypeHandler is used either by JsrtExternalType or DynamicType");
-
         if (useCache && newPrototype->GetInternalProperty(newPrototype, Js::InternalPropertyIds::TypeOfPrototypeObjectDictionary, (Js::Var*)&oldTypeToPromotedTypeMap, nullptr, scriptContext))
         {
             Assert(oldTypeToPromotedTypeMap && (Js::Var)oldTypeToPromotedTypeMap != scriptContext->GetLibrary()->GetUndefined());
             oldTypeToPromotedTypeMap = reinterpret_cast<TypeTransitionMap*>(oldTypeToPromotedTypeMap);
 
-            if (oldTypeToPromotedTypeMap->TryGetValue(reinterpret_cast<uintptr_t>(oldType), &cachedDynamicType))
+            if (oldTypeToPromotedTypeMap->TryGetValue(oldType, &cachedDynamicType))
             {
 #if DBG
                 oldCachedType = cachedDynamicType;
@@ -1555,6 +1552,16 @@ namespace Js
                     Assert(cachedDynamicTypeHandler->GetInlineSlotCapacity() >= roundedInlineSlotCapacity);
                     Assert(cachedDynamicTypeHandler->GetInlineSlotCapacity() >= GetPropertyCount());
                     cachedDynamicTypeHandler->ShrinkSlotAndInlineSlotCapacity();
+
+                    // If slot capacity doesn't match after shrinking, it could be because oldType was shrunk and
+                    // newType evolved. In that case, we should update the cache with new type
+                    if (cachedDynamicTypeHandler->GetInlineSlotCapacity() != roundedInlineSlotCapacity)
+                    {
+                        cachedDynamicType = nullptr;
+#if DBG
+                        swprintf_s(reason, 1024, _u("InlineSlotCapacity mismatch after shrinking. Required = %d, Cached = %d"), roundedInlineSlotCapacity, cachedDynamicTypeHandler->GetInlineSlotCapacity());
+#endif
+                    }
                 }
             }
         }
@@ -1585,7 +1592,7 @@ namespace Js
                 Js::PropertyId propertyId = GetPropertyId(scriptContext, i);
 
                 PropertyIndex propertyIndex = GetPropertyIndex(propertyId);
-                cachedDynamicType = pathTypeHandler->PromoteType<true>(cachedDynamicType, scriptContext->GetPropertyName(propertyId), true, scriptContext, nullptr, &propertyIndex);
+                cachedDynamicType = pathTypeHandler->PromoteType<false>(cachedDynamicType, scriptContext->GetPropertyName(propertyId), true, scriptContext, instance, &propertyIndex);
             }
 
             if (useCache)
@@ -1596,12 +1603,10 @@ namespace Js
                     newPrototype->SetInternalProperty(Js::InternalPropertyIds::TypeOfPrototypeObjectDictionary, (Var)oldTypeToPromotedTypeMap, PropertyOperationFlags::PropertyOperation_Force, nullptr);
                 }
 
-                // oldType is kind of weakReference here
+                oldTypeToPromotedTypeMap->Item(oldType, cachedDynamicType);
 #if DBG
                 cachedDynamicType->SetIsCachedForChangePrototype();
 #endif
-                oldTypeToPromotedTypeMap->Item(reinterpret_cast<uintptr_t>(oldType), cachedDynamicType);
-
                 if (PHASE_TRACE1(TypeShareForChangePrototypePhase))
                 {
 #if DBG

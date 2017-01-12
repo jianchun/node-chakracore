@@ -126,7 +126,7 @@ namespace Js
         JavascriptLibrary* library = scriptContext->GetLibrary();
         DynamicType* type = library->CreateFunctionWithLengthType(&EntryInfo::Revoke);
         RuntimeFunction* revoker = RecyclerNewEnumClass(scriptContext->GetRecycler(),
-            library->EnumFunctionClass, RuntimeFunction,
+            JavascriptLibrary::EnumFunctionClass, RuntimeFunction,
             type, &EntryInfo::Revoke);
 
         revoker->SetPropertyWithAttributes(Js::PropertyIds::length, Js::TaggedInt::ToVarUnchecked(0), PropertyNone, NULL);
@@ -709,6 +709,8 @@ namespace Js
 
     BOOL JavascriptProxy::DeleteProperty(PropertyId propertyId, PropertyOperationFlags flags)
     {
+        PROBE_STACK(GetScriptContext(), Js::Constants::MinStackDefault);
+
         //1. Assert: IsPropertyKey(P) is true.
         //2. Let handler be the value of the[[ProxyHandler]] internal slot of O.
         //3. If handler is null, then throw a TypeError exception.
@@ -913,8 +915,8 @@ namespace Js
             if (!threadContext->RecordImplicitException())
                 return FALSE;
             JavascriptError::ThrowTypeError(GetScriptContext(), JSERR_ErrorOnRevokedProxy, _u("ownKeys"));
-        }    
-        
+        }
+
         Var propertyName = nullptr;
         PropertyId propertyId;
         int index = 0;
@@ -922,7 +924,7 @@ namespace Js
         JavascriptArray* arrResult = requestContext->GetLibrary()->CreateArray();
 
         // 13.7.5.15 EnumerateObjectProperties(O) (https://tc39.github.io/ecma262/#sec-enumerate-object-properties)
-        // for (let key of Reflect.ownKeys(obj)) {    
+        // for (let key of Reflect.ownKeys(obj)) {
         Var trapResult = JavascriptOperators::GetOwnPropertyNames(this, requestContext);
         if (JavascriptArray::Is(trapResult))
         {
@@ -948,7 +950,7 @@ namespace Js
                         dict.Add(str->GetSz(), prop);
                         // if (desc.enumerable) yield key;
                         if (desc.IsEnumerable())
-                        {                            
+                        {
                             ret = arrResult->SetItem(index++, CrossSite::MarshalVar(requestContext, prop), PropertyOperation_None);
                             Assert(ret);
                         }
@@ -1039,6 +1041,8 @@ namespace Js
 
     BOOL JavascriptProxy::IsExtensible()
     {
+        PROBE_STACK(GetScriptContext(), Js::Constants::MinStackDefault);
+
         ScriptContext* scriptContext = GetScriptContext();
         // Reject implicit call
         ThreadContext* threadContext = scriptContext->GetThreadContext();
@@ -1096,6 +1100,8 @@ namespace Js
 
     BOOL JavascriptProxy::PreventExtensions()
     {
+        PROBE_STACK(GetScriptContext(), Js::Constants::MinStackDefault);
+
         ScriptContext* scriptContext = GetScriptContext();
         // Reject implicit call
         ThreadContext* threadContext = scriptContext->GetThreadContext();
@@ -1237,7 +1243,7 @@ namespace Js
         //7. ReturnIfAbrupt(keys).
         JavascriptArray* resultArray = JavascriptOperators::GetOwnPropertyKeys(obj, scriptContext);
 
-        const PropertyRecord* propertyRecord;        
+        const PropertyRecord* propertyRecord;
         if (integrityLevel == IntegrityLevel::IntegrityLevel_sealed)
         {
             //8. If level is "sealed", then
@@ -1580,6 +1586,8 @@ namespace Js
 
     BOOL JavascriptProxy::DefineOwnPropertyDescriptor(RecyclableObject* obj, PropertyId propId, const PropertyDescriptor& descriptor, bool throwOnError, ScriptContext* scriptContext)
     {
+        PROBE_STACK(scriptContext, Js::Constants::MinStackDefault);
+
         //1. Assert: IsPropertyKey(P) is true.
         //2. Let handler be the value of the[[ProxyHandler]] internal slot of O.
         //3. If handler is null, then throw a TypeError exception.
@@ -1847,7 +1855,7 @@ namespace Js
     {
         if (propertyDescriptor.ValueSpecified())
         {
-            return propertyDescriptor.GetValue();
+            return CrossSite::MarshalVar(requestContext, propertyDescriptor.GetValue());
         }
         if (propertyDescriptor.GetterSpecified())
         {
@@ -1952,7 +1960,7 @@ namespace Js
         {
             functionResult = JavascriptFunction::CallFunction<true>(this, this->GetEntryPoint(), args);
         }
-        return functionResult;
+        return CrossSite::MarshalVar(scriptContext, functionResult);
     }
 
     Var JavascriptProxy::FunctionCallTrap(RecyclableObject* function, CallInfo callInfo, ...)
@@ -2097,7 +2105,7 @@ namespace Js
         return trapResult;
     }
 
-    JavascriptArray* JavascriptProxy::PropertyKeysTrap(KeysTrapKind keysTrapKind)
+    JavascriptArray* JavascriptProxy::PropertyKeysTrap(KeysTrapKind keysTrapKind, ScriptContext* requestContext)
     {
         PROBE_STACK(GetScriptContext(), Js::Constants::MinStackDefault);
 
@@ -2126,7 +2134,7 @@ namespace Js
         //6. ReturnIfAbrupt(trap).
         //7. If trap is undefined, then
         //      a. Return target.[[OwnPropertyKeys]]().
-        JavascriptFunction* ownKeysMethod = GetMethodHelper(PropertyIds::ownKeys, scriptContext);
+        JavascriptFunction* ownKeysMethod = GetMethodHelper(PropertyIds::ownKeys, requestContext);
         Assert(!GetScriptContext()->IsHeapEnumInProgress());
 
         JavascriptArray *targetKeys;

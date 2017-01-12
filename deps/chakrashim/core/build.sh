@@ -46,11 +46,19 @@ PRINT_USAGE() {
     echo "      --sanitize=CHECKS Build with clang -fsanitize checks,"
     echo "                       e.g. undefined,signed-integer-overflow"
     echo "  -t, --test-build     Test build (by default Release build)"
+    echo "      --target[=S]     Target OS"
+    echo "      --trace          Enables experimental built-in trace"
     echo "      --xcode          Generate XCode project"
     echo "      --without=FEATURE,FEATURE,..."
     echo "                       Disable FEATUREs from JSRT experimental"
     echo "                       features."
     echo "  -v, --verbose        Display verbose output including all options"
+    echo "      --wb-check CPPFILE"
+    echo "                       Write-barrier check given CPPFILE (git path)"
+    echo "      --wb-analyze CPPFILE"
+    echo "                       Write-barrier analyze given CPPFILE (git path)"
+    echo "      --wb-args=PLUGIN_ARGS"
+    echo "                       Write-barrier clang plugin args"
     echo ""
     echo "example:"
     echo "  ./build.sh --cxx=/path/to/clang++ --cc=/path/to/clang -j"
@@ -78,6 +86,11 @@ OS_LINUX=0
 OS_APT_GET=0
 OS_UNIX=0
 LTO=""
+TARGET_OS=""
+ENABLE_CC_XPLAT_TRACE=""
+WB_CHECK=
+WB_ANALYZE=
+WB_ARGS=
 
 if [ -f "/proc/version" ]; then
     OS_LINUX=1
@@ -192,10 +205,12 @@ while [[ $# -gt 0 ]]; do
 
     --lto)
         LTO="-DENABLE_FULL_LTO_SH=1"
+        HAS_LTO=1
         ;;
 
     --lto-thin)
         LTO="-DENABLE_THIN_LTO_SH=1"
+        HAS_LTO=1
         ;;
 
     -n | --ninja)
@@ -231,6 +246,29 @@ while [[ $# -gt 0 ]]; do
         SANITIZE="-DCLANG_SANITIZE_SH=${SANITIZE}"
         ;;
 
+    --target=*)
+        _TARGET_OS=$1
+        _TARGET_OS="${_TARGET_OS:9}"
+        if [[ $_TARGET_OS =~ "android" ]]; then
+            OLD_PATH=$PATH
+            export TOOLCHAIN=$PWD/android-toolchain-arm
+            TARGET_OS="-DCC_TARGET_OS_ANDROID_SH=1 -DANDROID_TOOLCHAIN_DIR=${TOOLCHAIN}/arm-linux-androideabi"
+            export PATH=$TOOLCHAIN/bin:$OLD_PATH
+            export AR=arm-linux-androideabi-ar
+            export CC=arm-linux-androideabi-clang
+            export CXX=arm-linux-androideabi-clang++
+            export LINK=arm-linux-androideabi-clang++
+            export STRIP=arm-linux-androideabi-strip
+            # override CXX and CC
+            _CXX="${TOOLCHAIN}/bin/${CXX}"
+            _CC="${TOOLCHAIN}/bin/${CC}"
+        fi
+        ;;
+
+    --trace)
+        ENABLE_CC_XPLAT_TRACE="-DENABLE_CC_XPLAT_TRACE_SH=1"
+        ;;
+
     --without=*)
         FEATURES=$1
         FEATURES=${FEATURES:10}    # value after --without=
@@ -245,6 +283,30 @@ while [[ $# -gt 0 ]]; do
         done
         ;;
 
+    --wb-check)
+        if [[ "$2" =~ ^[^-] ]]; then
+            WB_CHECK="$2"
+            shift
+        else
+            WB_CHECK="*"  # check all files
+        fi
+        ;;
+
+    --wb-analyze)
+        if [[ "$2" =~ ^[^-] ]]; then
+            WB_ANALYZE="$2"
+            shift
+        else
+            PRINT_USAGE && exit 1
+        fi
+        ;;
+
+    --wb-args=*)
+        WB_ARGS=$1
+        WB_ARGS=${WB_ARGS:10}
+        WB_ARGS=${WB_ARGS// /;}  # replace space with ; to generate a cmake list
+        ;;
+
     *)
         echo "Unknown option $1"
         PRINT_USAGE
@@ -254,6 +316,11 @@ while [[ $# -gt 0 ]]; do
 
     shift
 done
+
+if [ "${HAS_LTO}${OS_LINUX}" == "11" ]; then
+    echo "lto: ranlib disabled"
+    export RANLIB=/bin/true
+fi
 
 if [[ ${#_VERBOSE} > 0 ]]; then
     # echo options back to the user
@@ -317,6 +384,61 @@ if [[ ${#_CXX} > 0 ]]; then
     CC_PREFIX="-DCMAKE_CXX_COMPILER=$_CXX -DCMAKE_C_COMPILER=$_CC"
 fi
 
+# prepare DbgController.js.h
+CH_DIR="${CHAKRACORE_DIR}/bin/ch"
+"${CH_DIR}/jstoc.py" "${CH_DIR}/DbgController.js" controllerScript
+if [[ $? != 0 ]]; then
+    exit 1
+fi
+
+################# Write-barrier check/analyze run #################
+WB_FLAG=
+WB_TARGET=
+if [[ $WB_CHECK || $WB_ANALYZE ]]; then
+    $CHAKRACORE_DIR/tools/RecyclerChecker/build.sh || exit 1
+
+    if [[ $MAKE != 'ninja' ]]; then
+        echo "--wb-check/wb-analyze only works with --ninja" && exit 1
+    fi
+    if [[ $WB_CHECK && $WB_ANALYZE ]]; then
+        echo "Please run only one of --wb-check or --wb-analyze" && exit 1
+    fi
+    if [[ $WB_CHECK ]]; then
+        WB_FLAG="-DWB_CHECK_SH=1"
+        WB_FILE=$WB_CHECK
+    fi
+    if [[ $WB_ANALYZE ]]; then
+        WB_FLAG="-DWB_ANALYZE_SH=1"
+        WB_FILE=$WB_ANALYZE
+    fi
+
+    if [[ $WB_ARGS ]]; then
+        if [[ $WB_ARGS =~ "-fix" ]]; then
+            MULTICORE_BUILD="-j 1"  # 1 job only if doing write barrier fix
+        fi
+        WB_ARGS="-DWB_ARGS_SH=$WB_ARGS"
+    fi
+
+    if [[ $WB_FILE != "*" ]]; then
+        if [[ -f $CHAKRACORE_DIR/$WB_FILE ]]; then
+            touch $CHAKRACORE_DIR/$WB_FILE
+        else
+            echo "$CHAKRACORE_DIR/$WB_FILE not found. Please use full git path for $WB_FILE." && exit 1
+        fi
+
+        WB_FILE_DIR=`dirname $WB_FILE`
+        WB_FILE_BASE=`basename $WB_FILE`
+
+        WB_FILE_CMAKELISTS="$CHAKRACORE_DIR/$WB_FILE_DIR/CMakeLists.txt"
+        if [[ -f $WB_FILE_CMAKELISTS ]]; then
+            SUBDIR=$(grep -i add_library $WB_FILE_CMAKELISTS | sed "s/.*(\([^ ]*\) .*/\1/")
+        else
+            echo "$WB_FILE_CMAKELISTS not found." && exit 1
+        fi
+        WB_TARGET="$WB_FILE_DIR/CMakeFiles/$SUBDIR.dir/$WB_FILE_BASE.o"
+    fi
+fi
+
 build_directory="$CHAKRACORE_DIR/BuildLinux/${BUILD_TYPE:0}"
 if [ ! -d "$build_directory" ]; then
     SAFE_RUN `mkdir -p $build_directory`
@@ -324,21 +446,29 @@ fi
 
 pushd $build_directory > /dev/null
 
-if [ $ARCH = "x86" ]; then
+if [[ $ARCH =~ "x86" ]]; then
     ARCH="-DCC_TARGETS_X86_SH=1"
     echo "Compile Target : x86"
 else
-    echo "Compile Target : amd64"
+    if [[ $ARCH =~ "arm" ]]; then
+        ARCH="-DCC_TARGETS_ARM_SH=1"
+        echo "Compile Target : arm"
+    else
+        echo "Compile Target : amd64"
+    fi
 fi
 
 echo Generating $BUILD_TYPE makefiles
-cmake $CMAKE_GEN $CC_PREFIX $ICU_PATH $LTO $STATIC_LIBRARY $ARCH \
-    -DCMAKE_BUILD_TYPE=$BUILD_TYPE $SANITIZE $NO_JIT $WITHOUT_FEATURES ../..
+cmake $CMAKE_GEN $CC_PREFIX $ICU_PATH $LTO $STATIC_LIBRARY $ARCH $TARGET_OS \
+    $ENABLE_CC_XPLAT_TRACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE $SANITIZE $NO_JIT \
+    $WITHOUT_FEATURES $WB_FLAG $WB_ARGS -DCMAKE_EXPORT_COMPILE_COMMANDS=ON  \
+    ../..
+# -DCMAKE_EXPORT_COMPILE_COMMANDS=ON useful for clang-query tool
 
 _RET=$?
 if [[ $? == 0 ]]; then
     if [[ $MAKE != 0 ]]; then
-        $MAKE $MULTICORE_BUILD $_VERBOSE 2>&1 | tee build.log
+        $MAKE $MULTICORE_BUILD $_VERBOSE $WB_TARGET 2>&1 | tee build.log
         _RET=${PIPESTATUS[0]}
     else
         echo "Visit given folder above for xcode project file ----^"
@@ -363,7 +493,7 @@ else
             "\nSection: base"\
             "\nPriority: optional"\
             "\nArchitecture: amd64"\
-            "\nDepends: libc6 (>= 2.19), uuid-dev (>> 0), libunwind-dev (>> 0), libicu-dev (>> 0)"\
+            "\nDepends: libc6 (>= 2.19), uuid-dev (>> 0), libicu-dev (>> 0)"\
             "\nMaintainer: ChakraCore <chakracore@microsoft.com>"\
             "\nDescription: Chakra Core"\
             "\n Open source Core of Chakra Javascript Engine"\

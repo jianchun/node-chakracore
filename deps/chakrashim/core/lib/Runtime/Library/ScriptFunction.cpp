@@ -66,6 +66,10 @@ namespace Js
         FunctionProxy* functionProxy = (*infoRef)->GetFunctionProxy();
         AssertMsg(functionProxy!= nullptr, "BYTE-CODE VERIFY: Must specify a valid function to create");
 
+        // Prevent redeferral if GC happens during creation of function object.
+        // REVIEW: Should we treat creation of a function object as a "use" of the function body?
+        Js::AutoDisableRedeferral autoDisableRedeferral(functionProxy->GetFunctionInfo());
+
         ScriptContext* scriptContext = functionProxy->GetScriptContext();
 
         bool hasSuperReference = functionProxy->HasSuperReference();
@@ -283,7 +287,7 @@ namespace Js
 
         // The type has change from the default, it is not share, just use that one.
         JavascriptMethod directEntryPoint = newFunctionInfo->GetDirectEntryPoint(newFunctionInfo->GetDefaultEntryPointInfo());
-#ifdef ENABLE_SCRIPT_PROFILING
+#if defined(ENABLE_SCRIPT_PROFILING) || defined(ENABLE_SCRIPT_DEBUGGING)
         Assert(directEntryPoint != DefaultDeferredParsingThunk
             && directEntryPoint != ProfileDeferredParsingThunk);
 #else
@@ -554,7 +558,7 @@ namespace Js
             {
             case Js::ScopeType::ScopeType_ActivationObject:
             case Js::ScopeType::ScopeType_WithScope:
-            {    
+            {
                 rctxInfo->EnqueueNewPathVarAsNeeded(this, (Js::Var)scope, scopePathString.GetStrValue());
                 break;
             }
@@ -566,7 +570,7 @@ namespace Js
                 //get the function body associated with the scope
                 if(slotArray.IsFunctionScopeSlotArray())
                 {
-                    rctxInfo->EnqueueNewFunctionBodyObject(this, slotArray.GetFunctionBody(), scopePathString.GetStrValue());
+                    rctxInfo->EnqueueNewFunctionBodyObject(this, slotArray.GetFunctionInfo()->GetFunctionBody(), scopePathString.GetStrValue());
                 }
                 else
                 {
@@ -654,14 +658,14 @@ namespace Js
 
     bool AsmJsScriptFunction::Is(Var func)
     {
-        return ScriptFunction::Is(func) && 
+        return ScriptFunction::Is(func) &&
             ScriptFunction::FromVar(func)->HasFunctionBody() &&
             ScriptFunction::FromVar(func)->GetFunctionBody()->GetIsAsmJsFunction();
     }
 
     bool AsmJsScriptFunction::IsWasmScriptFunction(Var func)
     {
-        return ScriptFunction::Is(func) && 
+        return ScriptFunction::Is(func) &&
             ScriptFunction::FromVar(func)->HasFunctionBody() &&
             ScriptFunction::FromVar(func)->GetFunctionBody()->IsWasmFunction();
     }
@@ -700,14 +704,14 @@ namespace Js
             this->m_inlineCacheTypes[index] == InlineCacheTypeInlineCache);
         this->m_inlineCacheTypes[index] = InlineCacheTypeInlineCache;
 #endif
-        return reinterpret_cast<InlineCache *>(this->m_inlineCaches[index]);
+        return reinterpret_cast<InlineCache *>(PointerValue(this->m_inlineCaches[index]));
     }
 
     void ScriptFunctionWithInlineCache::SetInlineCachesFromFunctionBody()
     {
         SetHasInlineCaches(true);
         Js::FunctionBody* functionBody = this->GetFunctionBody();
-        this->m_inlineCaches = functionBody->GetInlineCaches();
+        this->m_inlineCaches = (Field(void*)*)functionBody->GetInlineCaches();
 #if DBG
         this->m_inlineCacheTypes = functionBody->GetInlineCacheTypes();
 #endif
@@ -758,7 +762,7 @@ namespace Js
             {
                 if (this->m_inlineCaches[i])
                 {
-                    InlineCache* inlineCache = (InlineCache*)this->m_inlineCaches[i];
+                    InlineCache* inlineCache = (InlineCache*)(void*)this->m_inlineCaches[i];
                     if (isShutdown)
                     {
                         memset(this->m_inlineCaches[i], 0, sizeof(InlineCache));
@@ -786,7 +790,7 @@ namespace Js
                     }
                     else if (!scriptContext->IsClosed())
                     {
-                        AllocatorDelete(CacheAllocator, scriptContext->GetIsInstInlineCacheAllocator(), (IsInstInlineCache*)this->m_inlineCaches[i]);
+                        AllocatorDelete(CacheAllocator, scriptContext->GetIsInstInlineCacheAllocator(), (IsInstInlineCache*)(void*)this->m_inlineCaches[i]);
                     }
                     this->m_inlineCaches[i] = nullptr;
                 }
@@ -858,7 +862,7 @@ namespace Js
             this->m_inlineCacheTypes = RecyclerNewArrayLeafZ(functionBody->GetScriptContext()->GetRecycler(),
                 byte, totalCacheCount);
 #endif
-            this->m_inlineCaches = inlineCaches;
+            this->m_inlineCaches = (Field(void*)*)inlineCaches;
         }
     }
 
@@ -971,7 +975,7 @@ namespace Js
         if (NULL != this->m_inlineCaches)
         {
             FreeOwnInlineCaches<false>();
-            this->m_inlineCaches = NULL;
+            this->m_inlineCaches = nullptr;
             this->inlineCacheCount = 0;
             this->rootObjectLoadInlineCacheStart = 0;
             this->rootObjectLoadMethodInlineCacheStart = 0;

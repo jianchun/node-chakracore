@@ -8,10 +8,14 @@
 
 namespace Js
 {
-    ForInObjectEnumerator::ShadowData::ShadowData(RecyclableObject * initObject, RecyclableObject * firstPrototype, Recycler * recycler)
-        : currentObject(initObject), firstPrototype(firstPrototype), propertyIds(recycler)
+    ForInObjectEnumerator::ShadowData::ShadowData(
+        RecyclableObject * initObject,
+        RecyclableObject * firstPrototype,
+        Recycler * recycler)
+        : currentObject(initObject),
+          firstPrototype(firstPrototype),
+          propertyIds(recycler)
     {
-
     }
 
     ForInObjectEnumerator::ForInObjectEnumerator(RecyclableObject* object, ScriptContext * scriptContext, bool enumSymbols)
@@ -41,13 +45,15 @@ namespace Js
             && JavascriptOperators::GetTypeId(initObject) != TypeIds_Undefined);
 
         EnumeratorFlags flags;
-        RecyclableObject * firstPrototype = GetFirstPrototypeWithEnumerableProperties(initObject);
-        if (firstPrototype != nullptr)
+        RecyclableObject * firstPrototype = nullptr;
+        RecyclableObject * firstPrototypeWithEnumerableProperties = GetFirstPrototypeWithEnumerableProperties(initObject, &firstPrototype);
+        if (firstPrototypeWithEnumerableProperties != nullptr)
         {
             Recycler *recycler = requestContext->GetRecycler();
             this->shadowData = RecyclerNew(recycler, ShadowData, initObject, firstPrototype, recycler);
             flags = EnumeratorFlags::UseCache | EnumeratorFlags::SnapShotSemantics | EnumeratorFlags::EnumNonEnumerable | (enumSymbols ? EnumeratorFlags::EnumSymbols : EnumeratorFlags::None);
         }
+        // no enumerable properties in the prototype chain, no need to search it
         else
         {
             this->shadowData = nullptr;
@@ -67,31 +73,48 @@ namespace Js
         }
     }
 
-    RecyclableObject* ForInObjectEnumerator::GetFirstPrototypeWithEnumerableProperties(RecyclableObject* object)
+    RecyclableObject* ForInObjectEnumerator::GetFirstPrototypeWithEnumerableProperties(RecyclableObject* object, RecyclableObject** pFirstPrototype)
     {
         RecyclableObject* firstPrototype = nullptr;
+        RecyclableObject* firstPrototypeWithEnumerableProperties = nullptr;
+
         if (JavascriptOperators::GetTypeId(object) != TypeIds_HostDispatch)
         {
-            firstPrototype = object;
+            firstPrototypeWithEnumerableProperties = object;
             while (true)
             {
-                firstPrototype = firstPrototype->GetPrototype();
+                firstPrototypeWithEnumerableProperties = firstPrototypeWithEnumerableProperties->GetPrototype();
 
-                if (JavascriptOperators::GetTypeId(firstPrototype) == TypeIds_Null)
+                if (firstPrototypeWithEnumerableProperties == nullptr)
                 {
-                    firstPrototype = nullptr;
                     break;
                 }
 
-                if (!DynamicType::Is(firstPrototype->GetTypeId())
-                    || !DynamicObject::FromVar(firstPrototype)->GetHasNoEnumerableProperties())
+                if (JavascriptOperators::GetTypeId(firstPrototypeWithEnumerableProperties) == TypeIds_Null)
+                {
+                    firstPrototypeWithEnumerableProperties = nullptr;
+                    break;
+                }
+
+                if (firstPrototype == nullptr)
+                {
+                    firstPrototype = firstPrototypeWithEnumerableProperties;
+                }
+
+                if (!DynamicType::Is(firstPrototypeWithEnumerableProperties->GetTypeId())
+                    || !DynamicObject::FromVar(firstPrototypeWithEnumerableProperties)->GetHasNoEnumerableProperties())
                 {
                     break;
                 }
             }
         }
 
-        return firstPrototype;
+        if (pFirstPrototype != nullptr)
+        {
+            *pFirstPrototype = firstPrototype;
+        }
+
+        return firstPrototypeWithEnumerableProperties;
     }
 
     BOOL ForInObjectEnumerator::InitializeCurrentEnumerator(RecyclableObject * object, ForInCache * forInCache)
@@ -178,7 +201,6 @@ namespace Js
                     }
                 }
 
-                //check for shadowed property
                 if (TestAndSetEnumerated(propertyId) //checks if the property is already enumerated or not
                     && (attributes & PropertyEnumerable))
                 {
@@ -194,10 +216,11 @@ namespace Js
                 }
 
                 RecyclableObject * object;
-                if (!enumeratingPrototype)
+                if (!this->enumeratingPrototype)
                 {  
                     this->enumeratingPrototype = true;
                     object = this->shadowData->firstPrototype;
+                    this->shadowData->currentObject = object;
                 }
                 else
                 {

@@ -805,7 +805,7 @@ WasmBytecodeGenerator::EmitCall()
     {
     case wbCall:
         funcNum = GetReader()->m_currentNode.call.num;
-        calleeSignature = m_module->GetFunctionSignature(funcNum);
+        calleeSignature = m_module->GetWasmFunctionInfo(funcNum)->GetSignature();
         break;
     case wbCallIndirect:
         indirectIndexInfo = PopEvalStack();
@@ -1484,7 +1484,7 @@ WasmBytecodeGenerator::PopEvalStack()
     EmitInfo info = m_evalStack.Pop();
     if (info.type == WasmTypes::Limit)
     {
-        throw WasmCompilationException(_u("Missing operand"));
+        throw WasmCompilationException(_u("Reached end of stack"));
     }
     return info;
 }

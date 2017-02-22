@@ -99,8 +99,8 @@ extern char **environ;
 bool s_doTTRecord = false;
 bool s_doTTReplay = false;
 bool s_doTTDebug = false;
-bool s_useRelocatedSrc = false;
-const char* s_ttUri = nullptr;
+size_t s_ttoptReplayUriLength = 0;
+const char* s_ttoptReplayUri = NULL;
 uint32_t s_ttdSnapInterval = 2000;
 uint32_t s_ttdSnapHistoryLength = 2;
 uint64_t s_ttdStartupMode = 0x1;
@@ -1668,12 +1668,6 @@ static void ReportException(Environment* env,
   }
 
   fflush(stderr);
-#if ENABLE_TTD_NODE
-  // If TTD recording is enable then we want to emit the log info
-  if (s_doTTRecord) {
-      JsTTDEmitRecording();
-  }
-#endif
 }
 
 
@@ -2229,7 +2223,6 @@ void Exit(const FunctionCallbackInfo<Value>& args) {
     // If TTD recording is enable then we want to emit the log info
     if (s_doTTRecord) {
         JsTTDHostExit(args[0]->Int32Value());
-        JsTTDEmitRecording();
     }
 #endif
   WaitForInspectorDisconnect(Environment::GetCurrent(args));
@@ -3526,6 +3519,17 @@ static void PrintHelp() {
          "  --trace-events-enabled   track trace events\n"
          "  --trace-event-categories comma separated list of trace event\n"
          "                           categories to record\n"
+#if ENABLE_TTD_NODE
+         "  --record                 enable diagnostics record mode\n"
+         "  --record-interval=num    interval between snapshots in recording\n"
+         "                           (in milliseconds) defaults to 2 seconds\n"
+         "  --record-history=num     number of snapshots retained in log \n"
+         "                           during recording (deafults to 2)\n"
+         "  --replay=dir             replay execution from recording log\n"
+         "  --replay-debug=dir       replay and debug using recording log\n"
+         "  --break-first            break at first statement when running\n"
+         "                           in --replay-debug mode\n"
+ #endif
          "  --track-heap-objects     track heap object allocations for heap "
          "snapshots\n"
          "  --prof-process           process v8 profiler output generated\n"
@@ -3574,9 +3578,30 @@ static void PrintHelp() {
          "                           prefixed to the module search path\n"
          "NODE_REPL_HISTORY          path to the persistent REPL history file\n"
          "\n"
-         "Documentation can be found at https://nodejs.org/\n");
+         "Documentation can be found at https://nodejs.org/\n"
+#if ENABLE_TTD_NODE
+         "Record/Replay production diagnostics info at http://aka.ms/nodettd\n"
+#endif
+  );
 }
 
+#if ENABLE_TTD_NODE
+void TTDFlagWarning(const char* msg, const char* arg) {
+    fprintf(stderr, "%s", msg);
+    if(arg != nullptr) {
+        fprintf(stderr, "> %s\n", arg);
+    }
+    fprintf(stderr, "Run with \"-h\" for help with flags.\n");
+
+    exit(1);
+}
+
+void TTDFlagWarning_Cond(bool cond, const char* msg) {
+    if(!cond) {
+        TTDFlagWarning(msg, nullptr);
+    }
+}
+#endif
 
 // Parse command line arguments.
 //
@@ -3617,78 +3642,127 @@ static void ParseArgs(int* argc,
 
   unsigned int index = 1;
   bool short_circuit = false;
-  while (index < nargs && argv[index][0] == '-' && !short_circuit) {
-    const char* const arg = argv[index];
-    unsigned int args_consumed = 1;
+  while(index < nargs && argv[index][0] == '-' && !short_circuit) {
+      const char* const arg = argv[index];
+      unsigned int args_consumed = 1;
 
-    if (debug_options.ParseOption(arg)) {
-      // Done, consumed by DebugOptions::ParseOption().
-    } else if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
-      printf("%s\n", NODE_VERSION);
-      exit(0);
-    } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
-      PrintHelp();
-      exit(0);
-    } else if (strcmp(arg, "--eval") == 0 ||
-               strcmp(arg, "-e") == 0 ||
-               strcmp(arg, "--print") == 0 ||
-               strcmp(arg, "-pe") == 0 ||
-               strcmp(arg, "-p") == 0) {
-      bool is_eval = strchr(arg, 'e') != nullptr;
-      bool is_print = strchr(arg, 'p') != nullptr;
-      print_eval = print_eval || is_print;
-      // --eval, -e and -pe always require an argument.
-      if (is_eval == true) {
-        args_consumed += 1;
-        eval_string = argv[index + 1];
-        if (eval_string == nullptr) {
-          fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
-          exit(9);
-        }
-      } else if ((index + 1 < nargs) &&
-                 argv[index + 1] != nullptr &&
-                 argv[index + 1][0] != '-') {
-        args_consumed += 1;
-        eval_string = argv[index + 1];
-        if (strncmp(eval_string, "\\-", 2) == 0) {
-          // Starts with "\\-": escaped expression, drop the backslash.
-          eval_string += 1;
-        }
+      if(debug_options.ParseOption(arg)) {
+          // Done, consumed by DebugOptions::ParseOption().
       }
-    } else if (strcmp(arg, "--require") == 0 ||
-               strcmp(arg, "-r") == 0) {
-      const char* module = argv[index + 1];
-      if (module == nullptr) {
-        fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
-        exit(9);
+      else if(strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
+          printf("%s\n", NODE_VERSION);
+          exit(0);
       }
-      args_consumed += 1;
-      local_preload_modules[preload_module_count++] = module;
-    } else if (strcmp(arg, "--check") == 0 || strcmp(arg, "-c") == 0) {
-      syntax_check_only = true;
-    } else if (strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
-      force_repl = true;
-    } else if (strcmp(arg, "--no-deprecation") == 0) {
-      no_deprecation = true;
-    } else if (strcmp(arg, "--no-warnings") == 0) {
-      no_process_warnings = true;
-    } else if (strcmp(arg, "--trace-warnings") == 0) {
-      trace_warnings = true;
-    } else if (strcmp(arg, "--trace-deprecation") == 0) {
-      trace_deprecation = true;
-    } else if (strcmp(arg, "--trace-sync-io") == 0) {
-      trace_sync_io = true;
-    } else if (strcmp(arg, "--trace-events-enabled") == 0) {
-      trace_enabled = true;
-    } else if (strcmp(arg, "--trace-event-categories") == 0) {
-      const char* categories = argv[index + 1];
-      if (categories == nullptr) {
-        fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
-        exit(9);
+      else if(strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+          PrintHelp();
+          exit(0);
       }
-      args_consumed += 1;
-      trace_enabled_categories = categories;
-    } else if (strcmp(arg, "--track-heap-objects") == 0) {
+      else if(strcmp(arg, "--eval") == 0 ||
+          strcmp(arg, "-e") == 0 ||
+          strcmp(arg, "--print") == 0 ||
+          strcmp(arg, "-pe") == 0 ||
+          strcmp(arg, "-p") == 0) {
+          bool is_eval = strchr(arg, 'e') != nullptr;
+          bool is_print = strchr(arg, 'p') != nullptr;
+          print_eval = print_eval || is_print;
+          // --eval, -e and -pe always require an argument.
+          if(is_eval == true) {
+              args_consumed += 1;
+              eval_string = argv[index + 1];
+              if(eval_string == nullptr) {
+                  fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
+                  exit(9);
+              }
+          }
+          else if((index + 1 < nargs) &&
+              argv[index + 1] != nullptr &&
+              argv[index + 1][0] != '-') {
+              args_consumed += 1;
+              eval_string = argv[index + 1];
+              if(strncmp(eval_string, "\\-", 2) == 0) {
+                  // Starts with "\\-": escaped expression, drop the backslash.
+                  eval_string += 1;
+              }
+          }
+      }
+      else if(strcmp(arg, "--require") == 0 ||
+          strcmp(arg, "-r") == 0) {
+          const char* module = argv[index + 1];
+          if(module == nullptr) {
+              fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
+              exit(9);
+          }
+          args_consumed += 1;
+          local_preload_modules[preload_module_count++] = module;
+      }
+      else if(strcmp(arg, "--check") == 0 || strcmp(arg, "-c") == 0) {
+          syntax_check_only = true;
+      }
+      else if(strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
+          force_repl = true;
+      }
+      else if(strcmp(arg, "--no-deprecation") == 0) {
+          no_deprecation = true;
+      }
+      else if(strcmp(arg, "--no-warnings") == 0) {
+          no_process_warnings = true;
+      }
+      else if(strcmp(arg, "--trace-warnings") == 0) {
+          trace_warnings = true;
+      }
+      else if(strcmp(arg, "--trace-deprecation") == 0) {
+          trace_deprecation = true;
+      }
+      else if(strcmp(arg, "--trace-sync-io") == 0) {
+          trace_sync_io = true;
+      }
+      else if(strcmp(arg, "--trace-events-enabled") == 0) {
+          trace_enabled = true;
+      }
+      else if(strcmp(arg, "--trace-event-categories") == 0) {
+          const char* categories = argv[index + 1];
+          if(categories == nullptr) {
+              fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
+              exit(9);
+          }
+          args_consumed += 1;
+          trace_enabled_categories = categories;
+#if ENABLE_TTD_NODE
+      // Parse and extract the TT args before anything else
+      } else if(strcmp(arg, "--record") == 0) {
+          s_doTTRecord = true;
+      } else if(strstr(arg, "--replay=") == arg) {
+          s_doTTReplay = true;
+          s_ttoptReplayUri = arg + strlen("--replay=");
+          s_ttoptReplayUriLength = strlen(s_ttoptReplayUri);
+      } else if(strstr(arg, "--replay-debug=") == arg) {
+          s_doTTReplay = true;
+          s_doTTDebug = true;
+          s_ttoptReplayUri = arg + strlen("--replay-debug=");
+          s_ttoptReplayUriLength = strlen(s_ttoptReplayUri);
+      } else if(strcmp(arg, "--break-first") == 0) {
+          s_ttdStartupMode = (0x100 | 0x1);
+          debug_options.do_wait_for_connect();
+      } else if(strstr(arg, "--record-interval=") == arg) {
+          const char* intervalStr = arg + strlen("--record-interval=");
+          s_ttdSnapInterval = (uint32_t)atoi(intervalStr);
+      } else if(strstr(arg, "--record-history=") == arg) {
+          const char* historyStr = arg + strlen("--record-history=");
+          s_ttdSnapHistoryLength = (uint32_t)atoi(historyStr);
+      } else if(strstr(arg, "-TTRecord:") == arg) {
+          TTDFlagWarning("-TTRecord:[dir] is deprecated use --record\n", arg);
+      } else if(strstr(arg, "-TTReplay:") == arg) {
+          TTDFlagWarning("-TTReplay:[dir] is deprecated use --replay=dir\n", arg);
+      } else if(strstr(arg, "-TTDebug:") == arg) {
+          TTDFlagWarning("-TTDebug:[dir] is deprecated use --replay-debug=dir\n", arg);
+      } else if(strstr(arg, "-TTBreakFirst") == arg) {
+          TTDFlagWarning("-TTBreakFirst is deprecated use --break-first\n", arg);
+      } else if(strstr(arg, "-TTSnapInterval:") == arg) {
+          TTDFlagWarning("-TTSnapInterval is deprecated use --record-interval=num\n", arg);
+      } else if(strstr(arg, "-TTHistoryLength:") == arg) {
+          TTDFlagWarning("-TTHistoryLength is deprecated use --record-history=num\n", arg);
+#endif
+    } else if(strcmp(arg, "--track-heap-objects") == 0) {
       track_heap_objects = true;
     } else if (strcmp(arg, "--throw-deprecation") == 0) {
       throw_deprecation = true;
@@ -4207,39 +4281,6 @@ void Init(int* argc,
     config_preserve_symlinks = (*preserve_symlinks == '1');
   }
 
-#if ENABLE_TTD_NODE
-  // Parse and extract the TT args before anything else
-  int cpos = 0;
-  for (int i = 0; i < *argc; ++i) {
-      if (strstr(argv[i], "-TTRecord:") == argv[i]) {
-          s_doTTRecord = true;
-          s_ttUri = argv[i] + wcslen(L"-TTRecord:");
-      } else if (strstr(argv[i], "-TTReplay:") == argv[i]) {
-          s_doTTReplay = true;
-          s_ttUri = argv[i] + wcslen(L"-TTReplay:");
-      } else if (strstr(argv[i], "-TTDebug:") == argv[i]) {
-          s_doTTReplay = true;
-          s_doTTDebug = true;
-          s_ttUri = argv[i] + wcslen(L"-TTDebug:");
-      } else if (strstr(argv[i], "-TTBreakFirst") == argv[i]) {
-          s_ttdStartupMode = (0x100 | 0x1);
-          debug_options.do_wait_for_connect();
-      } else if (strstr(argv[i], "-TTSnapInterval:") == argv[i]) {
-          const char* intervalStr = argv[i] + strlen("-TTSnapInterval:");
-          s_ttdSnapInterval = (uint32_t)atoi(intervalStr);
-      } else if (strstr(argv[i], "-TTHistoryLength:") == argv[i]) {
-          const char* historyStr = argv[i] + strlen("-TTHistoryLength:");
-          s_ttdSnapHistoryLength = (uint32_t)atoi(historyStr);
-      } else if (strstr(argv[i], "-TTRelocatedCode") == argv[i]) {
-          s_useRelocatedSrc = true;
-      } else {
-          argv[cpos] = argv[i];
-          cpos++;
-      }
-  }
-  *argc = cpos;
-#endif
-
   // Parse a few arguments which are specific to Node.
   int v8_argc;
   const char** v8_argv;
@@ -4471,6 +4512,7 @@ inline int Start(Isolate* isolate, void* isolate_context,
 #if ENABLE_TTD_NODE
   // Start time travel after environment is loaded
   if (s_doTTRecord) {
+    fprintf(stderr, "Recording has been started (after main module loading)...\n");
     JsTTDStart();
   }
 #endif
@@ -4507,12 +4549,6 @@ inline int Start(Isolate* isolate, void* isolate_context,
 
   env.set_trace_sync_io(false);
 
-#if ENABLE_TTD_NODE
-  if (s_doTTRecord) {
-    JsTTDEmitRecording();
-    JsTTDStop();
-  }
-#endif
   const int exit_code = EmitExit(&env);
   RunAtExit(&env);
 
@@ -4536,9 +4572,16 @@ inline int Start(uv_loop_t* event_loop,
 #endif
 
 #if ENABLE_TTD_NODE
+  if(s_doTTRecord) {
+      fprintf(stderr, "Recording is enabled (but not yet started)...\n");
+  }
+
   Isolate* const isolate = Isolate::NewWithTTDSupport(params,
-    s_ttUri, s_doTTRecord, false, false, false,
-    s_ttdSnapInterval, s_ttdSnapHistoryLength);
+                                                      0, nullptr,
+                                                      s_doTTRecord,
+                                                      false, false,
+                                                      s_ttdSnapInterval,
+                                                      s_ttdSnapHistoryLength);
 #else
   Isolate* const isolate = Isolate::New(params);
 #endif
@@ -4654,6 +4697,9 @@ inline int Start_TTDReplay(Isolate* isolate, void* isolate_context,
         &s_ttdStartupMode,
         &nextEventTime);
   }
+
+  JsTTDStop();
+
   // We are done just dump the process.
   // In the future we might want to clean up more.
   exit(0);
@@ -4669,10 +4715,12 @@ inline int Start_TTDReplay(uv_loop_t* event_loop,
   params.code_event_handler = vTune::GetVtuneCodeEventHandler();
 #endif
 
+  fprintf(stderr, "Starting TT replay/debug using log in %s\n", s_ttoptReplayUri);
   Isolate* const isolate = Isolate::NewWithTTDSupport(params,
-    s_ttUri, false, true, s_doTTDebug,
-    s_useRelocatedSrc,
-    UINT32_MAX, UINT32_MAX);
+                                                      s_ttoptReplayUriLength,
+                                                      s_ttoptReplayUri,
+                                                      false, true, s_doTTDebug,
+                                                      UINT32_MAX, UINT32_MAX);
 
   if (isolate == nullptr)
     return 12;  // Signal internal error.
@@ -4779,6 +4827,41 @@ int Start(int argc, char** argv) {
 
   V8::Initialize();
   v8_initialized = true;
+
+#if ENABLE_TTD_NODE
+  bool chk_debug_enabled = debug_options.debugger_enabled() || debug_options.inspector_enabled();
+
+  TTDFlagWarning_Cond(!s_doTTRecord || !s_doTTReplay,
+      "Cannot enable record & replay at same time.\n");
+
+  if(s_doTTRecord || s_doTTReplay) {
+      TTDFlagWarning_Cond(eval_string == nullptr,
+          "Eval mode not supported in record/replay.\n");
+
+      TTDFlagWarning_Cond(!force_repl,
+          "Repl mode not supported in record/replay.\n");
+  }
+
+  if(s_doTTRecord) {
+      TTDFlagWarning_Cond(!chk_debug_enabled,
+          "Cannot enable debugger with record mode.\n");
+
+      TTDFlagWarning_Cond(s_ttdStartupMode == 0x1,
+          "Cannot set break flags in record mode.\n");
+  }
+
+  if(s_doTTReplay) {
+      TTDFlagWarning_Cond(!chk_debug_enabled || s_doTTDebug,
+          "Must enable --replay-debug if attaching debugger.\n");
+
+      TTDFlagWarning_Cond(!s_doTTDebug || chk_debug_enabled,
+          "Must enable debugger if running --replay-debug.\n");
+
+      TTDFlagWarning_Cond(s_ttoptReplayUri != nullptr,
+          "Must set replay source info when replaying.\n");
+  }
+#endif
+
 
 #if ENABLE_TTD_NODE
   int exit_code;

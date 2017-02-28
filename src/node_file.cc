@@ -260,6 +260,13 @@ static void After(uv_fs_t *req) {
 
       case UV_FS_READ:
         // Buffer interface
+#if ENABLE_TTD_NODE
+#ifdef WIN32
+        Buffer::TTDAsyncModNotify((byte*)(req->fs.info.bufsml[0].base + req->result));
+#else
+        Buffer::TTDAsyncModNotify((byte*)(req->bufsml[0].base + req->result));
+#endif
+#endif
         argv[1] = Integer::New(env->isolate(), req->result);
         break;
 

@@ -9165,9 +9165,30 @@ Lowerer::LowerLdArrViewElem(IR::Instr * instr)
 }
 
 IR::Instr *
+Lowerer::LowerWasmMemOp(IR::Instr * instr, IR::Opnd *addrOpnd)
+{
+    uint32 offset = addrOpnd->AsIndirOpnd()->GetOffset();
+
+    // don't encode offset for wasm memory reads/writes
+    addrOpnd->AsIndirOpnd()->m_dontEncode = true;
+
+    // if offset/size overflow the max length, throw (this also saves us from having to do int64 math)
+    int64 constOffset = (int64)addrOpnd->GetSize() + (int64)offset;
+    if (constOffset >= Js::ArrayBuffer::MaxArrayBufferLength)
+    {
+        GenerateRuntimeError(instr, WASMERR_ArrayIndexOutOfRange, IR::HelperOp_WebAssemblyRuntimeError);
+        return instr;
+    }
+    else
+    {
+        return m_lowererMD.LowerWasmMemOp(instr, addrOpnd);
+    }
+}
+
+IR::Instr *
 Lowerer::LowerLdArrViewElemWasm(IR::Instr * instr)
 {
-#ifdef ASMJS_PLAT
+#ifdef ENABLE_WASM
     Assert(m_func->GetJITFunctionBody()->IsWasmFunction());
     Assert(instr);
     Assert(instr->m_opcode == Js::OpCode::LdArrViewElemWasm);
@@ -9177,23 +9198,27 @@ Lowerer::LowerLdArrViewElemWasm(IR::Instr * instr)
     IR::Opnd * dst = instr->GetDst();
     IR::Opnd * src1 = instr->GetSrc1();
 
-    IR::Instr * done;
-
     Assert(!dst->IsFloat32() || src1->IsFloat32());
     Assert(!dst->IsFloat64() || src1->IsFloat64());
-    done = m_lowererMD.LowerWasmMemOp(instr, src1);
 
+    IR::Instr * done = LowerWasmMemOp(instr, src1);
+    IR::Instr* newMove = nullptr;
     if (dst->IsInt64())
     {
         IR::Instr* movInt64 = IR::Instr::New(Js::OpCode::Ld_I4, dst, src1, m_func);
         done->InsertBefore(movInt64);
-        m_lowererMD.LowerInt64Assign(movInt64);
+        newMove = m_lowererMD.LowerInt64Assign(movInt64);
     }
     else
     {
-        InsertMove(dst, src1, done);
+        newMove = InsertMove(dst, src1, done);
     }
 
+#if ENABLE_FAST_ARRAYBUFFER
+    // We need to have an AV when accessing out of bounds memory even if the dst is not used
+    // Make sure LinearScan doesn't dead store this instruction
+    newMove->hasSideEffects = true;
+#endif
     instr->Remove();
     return instrPrev;
 #else
@@ -9380,7 +9405,7 @@ Lowerer::LowerStArrViewElem(IR::Instr * instr)
 
     if (m_func->GetJITFunctionBody()->IsWasmFunction())
     {
-        done = m_lowererMD.LowerWasmMemOp(instr, dst);
+        done = LowerWasmMemOp(instr, dst);
     }
     else if (indexOpnd || m_func->GetJITFunctionBody()->GetAsmJsInfo()->AccessNeedsBoundCheck((uint32)dst->AsIndirOpnd()->GetOffset()))
     {
@@ -20224,7 +20249,7 @@ void Lowerer::GenerateBooleanNegate(IR::Instr * instr, IR::Opnd * srcBool, IR::O
     LowererMD::CreateAssign(dst, srcBool, instr);
     ScriptContextInfo* sci = instr->m_func->GetScriptContextInfo();
     IR::AddrOpnd* xorval = IR::AddrOpnd::New(sci->GetTrueAddr() ^ sci->GetFalseAddr(), IR::AddrOpndKindDynamicMisc, instr->m_func, true);
-    instr->InsertBefore(IR::Instr::New(LowererMD::MDXorOpcode, dst, dst, xorval, instr->m_func));
+    InsertXor(dst, dst, xorval, instr);
 }
 
 bool Lowerer::GenerateFastEqBoolInt(IR::Instr * instr, bool *pNeedHelper)

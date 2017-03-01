@@ -659,6 +659,11 @@ static void Stat(const FunctionCallbackInfo<Value>& args) {
     double* fields = static_cast<double*>(ab->GetContents().Data());
     SYNC_CALL(stat, *path, *path)
     FillStatsArray(fields, static_cast<const uv_stat_t*>(SYNC_REQ.ptr));
+
+#if ENABLE_TTD_NODE
+    ab->TTDRawBufferModifyNotifySync(array->ByteOffset(), 
+                                     array->Length() * sizeof(double));
+#endif
   } else if (args[1]->IsObject()) {
     ASYNC_CALL(stat, args[1], UTF8, *path)
   }
@@ -680,6 +685,11 @@ static void LStat(const FunctionCallbackInfo<Value>& args) {
     double* fields = static_cast<double*>(ab->GetContents().Data());
     SYNC_CALL(lstat, *path, *path)
     FillStatsArray(fields, static_cast<const uv_stat_t*>(SYNC_REQ.ptr));
+
+#if ENABLE_TTD_NODE
+    ab->TTDRawBufferModifyNotifySync(array->ByteOffset(),
+                                     array->Length() * sizeof(double));
+#endif
   } else if (args[1]->IsObject()) {
     ASYNC_CALL(lstat, args[1], UTF8, *path)
   }
@@ -702,6 +712,11 @@ static void FStat(const FunctionCallbackInfo<Value>& args) {
     double* fields = static_cast<double*>(ab->GetContents().Data());
     SYNC_CALL(fstat, 0, fd)
     FillStatsArray(fields, static_cast<const uv_stat_t*>(SYNC_REQ.ptr));
+
+#if ENABLE_TTD_NODE
+    ab->TTDRawBufferModifyNotifySync(array->ByteOffset(),
+                                     array->Length() * sizeof(double));
+#endif
   } else if (args[1]->IsObject()) {
     ASYNC_CALL(fstat, args[1], UTF8, fd)
   }

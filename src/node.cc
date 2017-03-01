@@ -2304,8 +2304,7 @@ void MemoryUsage(const FunctionCallbackInfo<Value>& args) {
   fields[3] = isolate->AdjustAmountOfExternalAllocatedMemory(0);
 
 #if ENABLE_TTD_NODE
-  ab->TTDRawBufferModifyNotifySync(args[0].As<Float64Array>()->ByteOffset(),
-      4 * sizeof(double));
+  ab->TTDRawBufferModifyNotifySync(array->ByteOffset(), 4 * sizeof(double));
 #endif
 }
 
@@ -2380,8 +2379,7 @@ void CPUUsage(const FunctionCallbackInfo<Value>& args) {
   fields[0] = MICROS_PER_SEC * rusage.ru_utime.tv_sec + rusage.ru_utime.tv_usec;
   fields[1] = MICROS_PER_SEC * rusage.ru_stime.tv_sec + rusage.ru_stime.tv_usec;
 #if ENABLE_TTD_NODE
-  ab->TTDRawBufferModifyNotifySync(args[0].As<Float64Array>()->ByteOffset(),
-                                   2 * sizeof(double));
+  ab->TTDRawBufferModifyNotifySync(array->ByteOffset(), 2 * sizeof(double));
 #endif
 }
 

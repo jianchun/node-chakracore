@@ -13,7 +13,7 @@
     'chakra_libs_absolute%': '',
 
     # xplat (non-win32) only
-    'chakra_config': 'Release',     # Debug, Release
+    'chakra_config': 'Debug',     # Debug, Release
 
     'conditions': [
       ['target_arch=="ia32"', { 'Platform': 'x86' }],

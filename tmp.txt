@@ -1,0 +1,98 @@
+=== Issue 1
+
+Shutdown assertions. On xplat Oguz has added an "atexit" handler to
+simulate DetachProcess. The "atexit" shutdown triggers some cleanup
+code which expects current thread context.
+
+gdb --args out/Release/node /home/xjc/node/test/parallel/test-async-wrap-throw-from-callback.js
+
+Thread 1 "node" received signal SIGILL, Illegal instruction.
+0x000000000148edc2 in Js::FunctionProxy::SetAuxPtr (this=0x7ff7f2163b80, e=Js::FunctionProxy::AuxPointerType::ObjLiteralTypes, ptr=0x0)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/Base/FunctionBody.cpp:125
+125	        Assert(ThreadContext::GetContextForCurrentThread() || ThreadContext::GetCriticalSection()->IsLocked());
+(gdb) bt
+#0  0x000000000148edc2 in Js::FunctionProxy::SetAuxPtr (this=0x7ff7f2163b80, e=Js::FunctionProxy::AuxPointerType::ObjLiteralTypes, ptr=0x0)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/Base/FunctionBody.cpp:125
+#1  0x00000000014c6eaf in Js::FunctionBody::SetObjectLiteralTypes (this=0x7ff7f2163b80, objLiteralTypes=0x0)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/./Base/FunctionBody.h:3455
+#2  0x00000000014a65ed in Js::FunctionBody::ResetObjectLiteralTypes (this=0x7ff7f2163b80)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/Base/FunctionBody.cpp:6210
+#3  0x0000000001493866 in Js::FunctionBody::Cleanup (this=0x7ff7f2163b80, isScriptContextClosing=true)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/Base/FunctionBody.cpp:7847
+#4  0x00000000014ed817 in Js::ScriptContext::InternalClose (this=0x316a4d8)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/Base/ScriptContext.cpp:630
+#5  0x00000000014ecfc8 in Js::ScriptContext::Close (this=0x316a4d8, inDestructor=false)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/Base/ScriptContext.cpp:783
+#6  0x00000000014f2a00 in Js::ScriptContext::MarkForClose (this=0x316a4d8)
+    at /home/xjc/node/deps/chakrashim/core/lib/Runtime/Base/ScriptContext.cpp:1349
+#7  0x000000000131cb72 in JsrtContextCore::Dispose (this=0x7ffff7e44000, isShutdown=false)
+    at /home/xjc/node/deps/chakrashim/core/lib/Jsrt/Core/JsrtContextCore.cpp:63
+#8  0x0000000001317e79 in JsrtRuntime::CloseContexts (this=0x31370f8) at /home/xjc/node/deps/chakrashim/core/lib/Jsrt/JsrtRuntime.cpp:73
+#9  0x0000000001317e11 in JsrtRuntime::Uninitialize () at /home/xjc/node/deps/chakrashim/core/lib/Jsrt/JsrtRuntime.cpp:63
+#10 0x00000000013179b5 in InitializeProcess()::$_0::operator()() const (this=0x0)
+    at /home/xjc/node/deps/chakrashim/core/lib/Jsrt/JsrtHelper.cpp:119
+#11 0x0000000001317969 in InitializeProcess()::$_0::__invoke() () at /home/xjc/node/deps/chakrashim/core/lib/Jsrt/JsrtHelper.cpp:111
+#12 0x00007ffff67e9ff8 in __run_exit_handlers (status=1, listp=0x7ffff6b735f8 <__exit_funcs>, run_list_atexit=run_list_atexit@entry=true)
+    at exit.c:82
+#13 0x00007ffff67ea045 in __GI_exit (status=<optimized out>) at exit.c:104
+#14 0x00000000011b471c in node::FatalException(v8::Isolate*, v8::Local<v8::Value>, v8::Local<v8::Message>) ()
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Common/vtinfo.h:107
+#15 0x000000000118fddc in v8::TryCatch::CheckReportExternalException() ()
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Common/vtinfo.h:107
+#16 0x0000000001181518 in v8::Function::Call(v8::Local<v8::Context>, v8::Local<v8::Value>, int, v8::Local<v8::Value>*) ()
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Common/vtinfo.h:107
+#17 0x00000000011815d3 in v8::Function::Call(v8::Local<v8::Value>, int, v8::Local<v8::Value>*) ()
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Common/vtinfo.h:107
+#18 0x0000000001195058 in node::AsyncWrap::MakeCallback(v8::Local<v8::Function>, int, v8::Local<v8::Value>*) ()
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Common/vtinfo.h:107
+#19 0x00000000011ab6aa in node::HandleWrap::OnClose(uv_handle_s*) () at /home/xjc/node/deps/chakrashim/core/lib/Common/Common/vtinfo.h:107
+#20 0x0000000001258cc5 in uv__finish_close (handle=0x369a9b0) at ../deps/uv/src/unix/core.c:270
+#21 uv__run_closing_handles (loop=0x3069060 <default_loop_struct>) at ../deps/uv/src/unix/core.c:284
+#22 uv_run (loop=0x3069060 <default_loop_struct>, mode=UV_RUN_ONCE) at ../deps/uv/src/unix/core.c:354
+#23 0x00000000011ba455 in node::Start(v8::Isolate*, void*, int, char const* const*, int, char const* const*) ()
+#24 0x00000000011b91dc in node::Start(int, char**) ()
+#25 0x00007ffff67d0830 in __libc_start_main (main=0xf9fda0 <main>, argc=2, argv=0x7fffffffded8, init=<optimized out>,
+    fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdec8) at ../csu/libc-start.c:291
+#26 0x0000000000fcb2b9 in _start ()
+
+
+
+=== Issue 2
+
+node "cctest" global variable calls "operator new", which is still bound
+to chakracore HeapNew.
+
+gdb --args out/Release/cctest
+
+Thread 1 "cctest" hit Breakpoint 1, CorUnix::InternalEnterCriticalSection (pThread=0x2b62d40,
+    pCriticalSection=0x2aa4670 <Memory::HeapAllocator::cs>) at /home/xjc/node/deps/chakrashim/core/pal/src/sync/cs.cpp:709
+709	        _ASSERTE(PalCsNotInitialized != pPalCriticalSection->cisInitState);
+
+(gdb) p pPalCriticalSection->cisInitState
+$42 = {m_val = PalCsNotInitialized}
+
+(gdb) bt
+#0  CorUnix::InternalEnterCriticalSection (pThread=0x2b62d40, pCriticalSection=0x2aa4670 <Memory::HeapAllocator::cs>)
+    at /home/xjc/node/deps/chakrashim/core/pal/src/sync/cs.cpp:709
+#1  0x0000000001605de7 in EnterCriticalSection (lpCriticalSection=0x2aa4670 <Memory::HeapAllocator::cs>)
+    at /home/xjc/node/deps/chakrashim/core/pal/src/sync/cs.cpp:289
+#2  0x0000000000f960c5 in CriticalSection::Enter (this=0x2aa4670 <Memory::HeapAllocator::cs>)
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Core/CriticalSection.h:17
+#3  0x0000000000f968a6 in Memory::HeapAllocator::AllocT<true> (this=0x2aa47b8 <Memory::HeapAllocator::Instance>, byteSize=96)
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Memory/HeapAllocator.cpp:99
+#4  0x0000000000f9476d in Memory::HeapAllocator::NoThrowAlloc (this=0x2aa47b8 <Memory::HeapAllocator::Instance>, byteSize=8)
+    at /home/xjc/node/deps/chakrashim/core/lib/Common/Memory/HeapAllocator.h:111
+#5  0x0000000000f94999 in operator new[]<Memory::HeapAllocator> (byteSize=8, alloc=0x2aa47b8 <Memory::HeapAllocator::Instance>,
+    nothrow=true, AllocFunc=
+    (char *(Memory::HeapAllocator::*)(Memory::HeapAllocator * const, size_t)) 0xf94750 <Memory::HeapAllocator::NoThrowAlloc(unsigned long)>) at /home/xjc/node/deps/chakrashim/core/lib/Common/Memory/Allocator.h:463
+#6  0x0000000000f946e8 in Memory::AllocateArray<Memory::HeapAllocator, char, true> (allocator=0x2aa47b8 <Memory::HeapAllocator::Instance>,
+    AllocFunc=
+    (char *(Memory::HeapAllocator::*)(Memory::HeapAllocator * const, size_t)) 0xf94750 <Memory::HeapAllocator::NoThrowAlloc(unsigned long)>, count=8) at /home/xjc/node/deps/chakrashim/core/lib/Common/Memory/Allocator.h:309
+#7  0x0000000000f94536 in operator new (byteSize=8) at /home/xjc/node/deps/chakrashim/core/lib/Common/Memory/HeapAllocatorOperators.cpp:14
+#8  0x0000000000f33e81 in _GLOBAL__sub_I__ZN22UtilTest_ListHead_Test10test_info_E ()
+#9  0x000000000234f9fd in __libc_csu_init ()
+#10 0x00007ffff67d07bf in __libc_start_main (main=0xf342f0 <main>, argc=1, argv=0x7fffffffdf18, init=0x234f9b0 <__libc_csu_init>,
+    fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffdf08) at ../csu/libc-start.c:247
+#11 0x0000000000f5e669 in _start () at /home/xjc/node/deps/chakrashim/core/lib/Common/DataStructures/SparseBitVector.h:320
+
+

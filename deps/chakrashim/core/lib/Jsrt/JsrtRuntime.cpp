@@ -49,7 +49,6 @@ JsrtRuntime::~JsrtRuntime()
 void JsrtRuntime::Uninitialize()
 {
     ThreadContext* currentThreadContext = ThreadContext::GetThreadContextList();
-    ThreadContext* tmpThreadContext;
     while (currentThreadContext)
     {
         Assert(!currentThreadContext->IsScriptActive());
@@ -57,12 +56,8 @@ void JsrtRuntime::Uninitialize()
         if (currentThreadContext->IsInScript()) break;
 #endif
         JsrtRuntime* currentRuntime = static_cast<JsrtRuntime*>(currentThreadContext->GetJSRTRuntime());
-        tmpThreadContext = currentThreadContext;
         currentThreadContext = currentThreadContext->Next();
-
-        currentRuntime->CloseContexts();
-        RentalThreadContextManager::DestroyThreadContext(tmpThreadContext);
-        HeapDelete(currentRuntime);
+        JsDisposeRuntime(currentRuntime);
     }
 }
 

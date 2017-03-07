@@ -229,6 +229,11 @@ struct ForceLeafAllocator
 template <typename TAllocator, typename T>
 void DeleteObject(typename AllocatorInfo<TAllocator, T>::AllocatorType * allocator, T * obj)
 {
+    if (!obj)
+    {
+        return; // allow "HeapDelete(nullptr)" (delete nullptr)
+    }
+
     obj->~T();
 
     auto freeFunc = AllocatorInfo<TAllocator, T>::InstAllocatorFunc::GetFreeFunc(); // Use InstAllocatorFunc
@@ -314,9 +319,9 @@ inline T * AllocateArray(TAllocator * allocator, char * (TAllocator::*AllocFunc)
 template <typename TAllocator, typename T>
 void DeleteArray(typename AllocatorInfo<TAllocator, T>::AllocatorType * allocator, size_t count, T * obj)
 {
-    if(count == 0)
+    if(count == 0 || !obj)
     {
-        return;
+        return; // allow "HeapDeleteArray(nullptr)" (delete[] nullptr)
     }
 
     for (size_t i = 0; i < count; i++)

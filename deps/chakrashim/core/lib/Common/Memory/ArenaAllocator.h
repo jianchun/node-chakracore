@@ -801,14 +801,13 @@ class RefCounted
 {
     volatile LONG refCount;
 
-protected:
-    virtual ~RefCounted()
-    {
-    }
-
 public:
     RefCounted()
         : refCount(1)
+    {
+    }
+
+    virtual ~RefCounted()
     {
     }
 
@@ -823,7 +822,7 @@ public:
 
         if (0 == refs)
         {
-            delete this;
+            HeapDelete(this);
         }
 
         return refs;
@@ -882,7 +881,6 @@ class ReferencedArenaAdapter : public RefCounted
     bool deleteFlag;
 
 public:
-
     ~ReferencedArenaAdapter()
     {
         if (this->arena)

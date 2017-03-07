@@ -678,7 +678,7 @@ namespace regex
         T ** ToReferenceArrayInHeap(size_t size)
         {
             Assert(size == Count());
-            auto result = new T *[size];
+            auto result = HeapNewNoThrowArray(T*, size);
             IfNullThrowOutOfMemory(result);
 
             auto current = this;
@@ -717,7 +717,7 @@ namespace regex
                 current = current->next;
             }
             current->next = nullptr;
-            delete []arr;
+            HeapDeleteArray(size, arr);
             return result;
         }
 
@@ -744,7 +744,7 @@ namespace regex
                 current->next = result;
                 result = current;
             }
-            delete []arr;
+            HeapDeleteArray(size, arr);
             return result;
         }
 
@@ -946,8 +946,8 @@ namespace regex
             {
                 nextAllocatedStringChunk = allocatedStringChunk->next;
 
-                delete[] allocatedStringChunk->dataPtr;
-                delete allocatedStringChunk;
+                HeapDeleteArray(/*unused*/-1, allocatedStringChunk->dataPtr);
+                HeapDelete(allocatedStringChunk);
 
                 allocatedStringChunk = nextAllocatedStringChunk;
             }
@@ -956,7 +956,7 @@ namespace regex
             {
                 auto current = head;
                 head = head->next;
-                delete current;
+                HeapDelete(current);
             }
         }
 
@@ -987,7 +987,7 @@ namespace regex
             // Generate new chunk
             if (currentIndex == chunkSize)
             {
-                StringChunk *newChunk = new StringChunk();
+                StringChunk *newChunk = HeapNewNoThrow(StringChunk);
                 IfNullThrowOutOfMemory(newChunk);
 
                 if (tail == nullptr)

@@ -164,11 +164,6 @@ Scanner<EncodingPolicy>::Scanner(Parser* parser, HashTbl *phtbl, Token *ptoken, 
     m_fAwaitIsKeyword = false;
 }
 
-template <typename EncodingPolicy>
-Scanner<EncodingPolicy>::~Scanner(void)
-{
-}
-
 /*****************************************************************************
 *
 *  Initializes the scanner to prepare to scan the given source text.
@@ -1713,7 +1708,7 @@ tokens Scanner<EncodingPolicy>::ScanForcingPid()
             {
                 this->m_DeferredParseFlags = deferredParseFlagsSave;
             });
-        
+
         return result;
     }
     return Scan();
@@ -1748,7 +1743,7 @@ tokens Scanner<EncodingPolicy>::ScanCore(bool identifyKwds)
     EncodedCharPtr p = m_currentCharacter;
     EncodedCharPtr last = m_pchLast;
     bool seenDelimitedCommentEnd = false;
-    
+
     // store the last token
     m_tkPrevious = m_ptoken->tk;
     m_iecpLimTokPrevious = IecpLimTok();    // Introduced for use by lambda parsing to find correct span of expression lambdas

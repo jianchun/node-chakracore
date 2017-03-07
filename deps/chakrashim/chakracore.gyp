@@ -121,6 +121,7 @@
                 '<(chakra_dir)/build.sh',
                 '--without=Simdjs',
                 '--static',
+                '-j=6',
                 '<@(chakra_build_flags)',
                 '<@(icu_args)'
               ],

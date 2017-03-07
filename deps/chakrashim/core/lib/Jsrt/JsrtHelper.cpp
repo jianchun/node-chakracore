@@ -105,25 +105,25 @@ void JsrtCallbackState::ObjectBeforeCallectCallbackWrapper(JsObjectBeforeCollect
         pthread_key_create(&s_threadLocalDummy, DISPOSE_CHAKRA_CORE_THREAD);
 #endif
 
-    // setup the cleanup
-    // we do not track the main thread. When it exits do the cleanup below
-#ifdef CHAKRA_STATIC_LIBRARY
-    atexit([]() {
-        ThreadContext *threadContext = ThreadContext::GetContextForCurrentThread();
-        if (threadContext)
-        {
-            if (threadContext->IsInScript()) return;
-            ThreadBoundThreadContextManager::DestroyContextAndEntryForCurrentThread();
-        }
+//     // setup the cleanup
+//     // we do not track the main thread. When it exits do the cleanup below
+// #ifdef CHAKRA_STATIC_LIBRARY
+//     atexit([]() {
+//         ThreadContext *threadContext = ThreadContext::GetContextForCurrentThread();
+//         if (threadContext)
+//         {
+//             if (threadContext->IsInScript()) return;
+//             ThreadBoundThreadContextManager::DestroyContextAndEntryForCurrentThread();
+//         }
 
-        JsrtRuntime::Uninitialize();
+//         JsrtRuntime::Uninitialize();
 
-        // thread-bound entrypoint should be able to get cleanup correctly, however tlsentry
-        // for current thread might be left behind if this thread was initialized.
-        ThreadContextTLSEntry::CleanupThread();
-        ThreadContextTLSEntry::CleanupProcess();
-    });
-#endif
+//         // thread-bound entrypoint should be able to get cleanup correctly, however tlsentry
+//         // for current thread might be left behind if this thread was initialized.
+//         ThreadContextTLSEntry::CleanupThread();
+//         ThreadContextTLSEntry::CleanupProcess();
+//     });
+// #endif
 
 #ifndef _WIN32
         PAL_InitializeChakraCore();

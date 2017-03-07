@@ -8,26 +8,32 @@
 // Default operator new/delete overrides
 //----------------------------------------
 
-_Ret_maybenull_ void * __cdecl
-operator new(DECLSPEC_GUARD_OVERFLOW size_t byteSize)
-{
-    return HeapNewNoThrowArray(char, byteSize);
-}
+// To make memory tracking easier, we prefer replacing global operator
+// new/delete usages with explicit HeapNew/HeapDelete.
+//
+// Commented out following.
 
-_Ret_maybenull_ void * __cdecl
-operator new[](DECLSPEC_GUARD_OVERFLOW size_t byteSize)
-{
-    return HeapNewNoThrowArray(char, byteSize);
-}
+// _Ret_maybenull_ void * __cdecl
+// operator new(DECLSPEC_GUARD_OVERFLOW size_t byteSize)
+// {
+//     return HeapNewNoThrowArray(char, byteSize);
+// }
 
-void __cdecl
-operator delete(void * obj) _NOEXCEPT_
-{
-    HeapAllocator::Instance.Free(obj, (size_t)-1);
-}
+// _Ret_maybenull_ void * __cdecl
+// operator new[](DECLSPEC_GUARD_OVERFLOW size_t byteSize)
+// {
+//     return HeapNewNoThrowArray(char, byteSize);
+// }
 
-void __cdecl
-operator delete[](void * obj) _NOEXCEPT_
-{
-    HeapAllocator::Instance.Free(obj, (size_t)-1);
-}
+// void __cdecl
+// operator delete(void * obj) _NOEXCEPT_
+// {
+//     HeapAllocator::Instance.Free(obj, (size_t)-1);
+// }
+
+// void __cdecl
+// operator delete[](void * obj) _NOEXCEPT_
+// {
+//     HeapAllocator::Instance.Free(obj, (size_t)-1);
+// }
+

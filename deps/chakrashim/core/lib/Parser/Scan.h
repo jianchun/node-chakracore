@@ -370,7 +370,7 @@ public:
     }
     void Release(void)
     {
-        delete this;
+        HeapDelete(this);
     }
 
     tokens Scan();

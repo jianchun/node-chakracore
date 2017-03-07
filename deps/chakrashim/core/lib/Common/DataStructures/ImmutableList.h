@@ -946,7 +946,8 @@ namespace regex
             {
                 nextAllocatedStringChunk = allocatedStringChunk->next;
 
-                HeapDeleteArray(/*unused*/-1, allocatedStringChunk->dataPtr);
+                HeapAllocator::Instance.Free(
+                    allocatedStringChunk->dataPtr, (size_t)-1);
                 HeapDelete(allocatedStringChunk);
 
                 allocatedStringChunk = nextAllocatedStringChunk;

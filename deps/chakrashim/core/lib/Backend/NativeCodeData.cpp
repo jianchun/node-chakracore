@@ -191,7 +191,10 @@ NativeCodeData::DeleteChunkList(DataChunkT * chunkList)
     {
         DataChunkT * current = next;
         next = next->next;
-        HeapDelete(current);
+
+        //HeapDelete(current);
+        // TODO: Should be HeapDeletePlus, but we don't know exact plusSize
+        HeapAllocator::Instance.Free(current, (size_t)-1);
     }
 }
 

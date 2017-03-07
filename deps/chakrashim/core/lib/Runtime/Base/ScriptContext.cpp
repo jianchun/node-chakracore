@@ -3970,7 +3970,8 @@ namespace Js
                             scriptContext->OnDispatchFunctionExit(pwszFunctionName);
                             if (pwszExtractedFunctionName != NULL)
                             {
-                                HeapDeleteArray(/*unused*/-1, pwszExtractedFunctionName);
+                                HeapAllocator::Instance.Free(
+                                    pwszExtractedFunctionName, (size_t)-1);
                             }
                         }
                     }

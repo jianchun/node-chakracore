@@ -822,7 +822,8 @@ public:
 
         if (0 == refs)
         {
-            HeapDelete(this);
+            // size unknown (determined by derived class)
+            HeapDelete(this, AllocatorDeleteFlags::UnknownSize);
         }
 
         return refs;

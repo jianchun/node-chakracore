@@ -12,11 +12,13 @@
 #define HeapNewStructPlusZ(size, T, ...) AllocatorNewStructPlusZ(HeapAllocator, &HeapAllocator::Instance, size, T)
 #define HeapNewArray(T, count, ...) AllocatorNewArray(HeapAllocator, &HeapAllocator::Instance, T, count)
 #define HeapNewArrayZ(T, count, ...) AllocatorNewArrayZ(HeapAllocator, &HeapAllocator::Instance, T, count)
-#define HeapDelete(obj) AllocatorDelete(HeapAllocator, &HeapAllocator::Instance, obj)
-#define HeapDeletePlus(size, obj) AllocatorDeletePlus(HeapAllocator, &HeapAllocator::Instance, size, obj)
-#define HeapDeletePlusPrefix(size, obj) AllocatorDeletePlusPrefix(HeapAllocator, &HeapAllocator::Instance, size, obj)
+#define HeapDelete(obj, ...) \
+        AllocatorDelete(HeapAllocator, &HeapAllocator::Instance, obj, ##__VA_ARGS__)
+#define HeapDeletePlus(size, obj, ...) \
+        AllocatorDeletePlus(HeapAllocator, &HeapAllocator::Instance, size, obj, ##__VA_ARGS__)
+#define HeapDeletePlusPrefix(size, obj, ...) \
+        AllocatorDeletePlusPrefix(HeapAllocator, &HeapAllocator::Instance, size, obj, ##__VA_ARGS__)
 #define HeapDeleteArray(count, obj) AllocatorDeleteArray(HeapAllocator, &HeapAllocator::Instance, count, obj)
-
 
 #define HeapNewNoThrow(T, ...) AllocatorNewNoThrow(HeapAllocator, &HeapAllocator::Instance, T, __VA_ARGS__)
 #define HeapNewNoThrowZ(T, ...) AllocatorNewNoThrowZ(HeapAllocator, &HeapAllocator::Instance, T, __VA_ARGS__)

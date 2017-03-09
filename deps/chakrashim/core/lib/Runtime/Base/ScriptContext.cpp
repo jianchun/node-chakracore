@@ -3845,14 +3845,14 @@ namespace Js
                         if (pwszNameStart == nullptr || pwszNameEnd == nullptr || ((int)(pwszNameEnd - pwszNameStart) <= 0))
                         {
                             int len = ((JavascriptString *)sourceString)->GetLength() + 1;
-                            pwszExtractedFunctionName = new char16[len];
+                            pwszExtractedFunctionName = HeapNewArray(char16, len);
                             wcsncpy_s(pwszExtractedFunctionName, len, pwszToString, _TRUNCATE);
                         }
                         else
                         {
                             int len = (int)(pwszNameEnd - pwszNameStart);
                             AssertMsg(len > 0, "Allocating array with zero or negative length?");
-                            pwszExtractedFunctionName = new char16[len];
+                            pwszExtractedFunctionName = HeapNewArray(char16, len);
                             wcsncpy_s(pwszExtractedFunctionName, len, pwszNameStart + 1, _TRUNCATE);
                         }
                         pwszFunctionName = pwszExtractedFunctionName;
@@ -3970,7 +3970,8 @@ namespace Js
                             scriptContext->OnDispatchFunctionExit(pwszFunctionName);
                             if (pwszExtractedFunctionName != NULL)
                             {
-                                delete[]pwszExtractedFunctionName;
+                                HeapAllocator::Instance.Free(
+                                    pwszExtractedFunctionName, (size_t)-1);
                             }
                         }
                     }
@@ -4441,7 +4442,7 @@ void ScriptContext::RegisterConstructorCache(Js::PropertyId propertyId, Js::Cons
 }
 #endif
 
-JITPageAddrToFuncRangeCache * 
+JITPageAddrToFuncRangeCache *
 ScriptContext::GetJitFuncRangeCache()
 {
     return jitFuncRangeCache;
@@ -6138,7 +6139,7 @@ void ScriptContext::RegisterPrototypeChainEnsuredToHaveOnlyWritableDataPropertie
     {
         return jitPageAddrToFuncRangeMap;
     }
-    
+
     JITPageAddrToFuncRangeCache::LargeJITFuncAddrToSizeMap * JITPageAddrToFuncRangeCache::GetLargeJITFuncAddrToSizeMap()
     {
         return largeJitFuncToSizeMap;

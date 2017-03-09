@@ -60,9 +60,13 @@ void JsrtRuntime::Uninitialize()
         tmpThreadContext = currentThreadContext;
         currentThreadContext = currentThreadContext->Next();
 
+#ifdef CHAKRA_STATIC_LIBRARY
+        RentalThreadContextManager::DestroyThreadContext(tmpThreadContext);
+#else
         currentRuntime->CloseContexts();
         RentalThreadContextManager::DestroyThreadContext(tmpThreadContext);
         HeapDelete(currentRuntime);
+#endif
     }
 }
 

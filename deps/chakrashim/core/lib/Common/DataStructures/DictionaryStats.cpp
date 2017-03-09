@@ -238,10 +238,10 @@ void DictionaryStats::ClearStats()
         {
             DictionaryStats *pCurrent = pNext;
             pNext = pNext->pNext;
-            delete pCurrent;
+            NoCheckHeapDelete(pCurrent);
         }
         current = current->pNext;
-        delete type;
+        NoCheckHeapDelete(type);
     }
     dictionaryTypes = NULL;
 }

@@ -115,6 +115,7 @@ void JsrtCallbackState::ObjectBeforeCallectCallbackWrapper(JsObjectBeforeCollect
             if (threadContext->IsInScript()) return;
             ThreadBoundThreadContextManager::DestroyContextAndEntryForCurrentThread();
         }
+        ThreadBoundThreadContextManager::DestroyAllContextsAndEntries();
 
         JsrtRuntime::Uninitialize();
 

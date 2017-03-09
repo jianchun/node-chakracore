@@ -223,10 +223,17 @@ JsUtil::JobProcessor * ThreadBoundThreadContextManager::GetSharedJobProcessor()
 
 void RentalThreadContextManager::DestroyThreadContext(ThreadContext* threadContext)
 {
-    ShutdownThreadContext(threadContext);
+    bool deleteThreadContext = true;
+
+#ifdef CHAKRA_STATIC_LIBRARY
+    deleteThreadContext = false;
+#endif
+
+    ShutdownThreadContext(threadContext, deleteThreadContext);
 }
 
-void ThreadContextManagerBase::ShutdownThreadContext(ThreadContext* threadContext)
+void ThreadContextManagerBase::ShutdownThreadContext(
+    ThreadContext* threadContext, bool deleteThreadContext /*= true*/)
 {
 
 #if DBG
@@ -238,5 +245,8 @@ void ThreadContextManagerBase::ShutdownThreadContext(ThreadContext* threadContex
 #endif
     threadContext->ShutdownThreads();
 
-    HeapDelete(threadContext);
+    if (deleteThreadContext)
+    {
+        HeapDelete(threadContext);
+    }
 }

@@ -48,7 +48,9 @@ JsrtCallbackState::JsrtCallbackState(ThreadContext* currentThreadContext)
         originalThreadContext = currentThreadContext;
     }
     originalJsrtContext = JsrtContext::GetCurrent();
-    Assert(originalJsrtContext == nullptr || originalThreadContext == originalJsrtContext->GetScriptContext()->GetThreadContext());
+    Assert(originalJsrtContext == nullptr
+        || !originalJsrtContext->GetJavascriptLibrary()  // shutting down
+        || originalThreadContext == originalJsrtContext->GetScriptContext()->GetThreadContext());
 }
 
 JsrtCallbackState::~JsrtCallbackState()
@@ -89,52 +91,44 @@ void JsrtCallbackState::ObjectBeforeCallectCallbackWrapper(JsObjectBeforeCollect
     }
 
 #ifndef _WIN32
-    static pthread_key_t s_threadLocalDummy;
-#endif
-    static THREAD_LOCAL bool s_threadWasEntered = false;
-
-    _NOINLINE void DISPOSE_CHAKRA_CORE_THREAD(void *_)
+    static THREAD_LOCAL struct _OnThreadExit
     {
-        free(_);
-        ThreadBoundThreadContextManager::DestroyContextAndEntryForCurrentThread();
-    }
+        ~_OnThreadExit()
+        {
+            ThreadBoundThreadContextManager::DestroyContextAndEntryForCurrentThread();
+        }
+    } _s_onThreadExit;
+#endif
+
+    static THREAD_LOCAL bool s_threadWasEntered = false;
 
     _NOINLINE bool InitializeProcess()
     {
-#if !defined(_WIN32)
-        pthread_key_create(&s_threadLocalDummy, DISPOSE_CHAKRA_CORE_THREAD);
-#endif
+        // setup the cleanup
+        // we do not track the main thread. When it exits do the cleanup below
+    #ifdef CHAKRA_STATIC_LIBRARY
+        atexit([]() {
+            ThreadBoundThreadContextManager::DestroyAllContextsAndEntries();
 
-    // setup the cleanup
-    // we do not track the main thread. When it exits do the cleanup below
-#ifdef CHAKRA_STATIC_LIBRARY
-    atexit([]() {
-        ThreadContext *threadContext = ThreadContext::GetContextForCurrentThread();
-        if (threadContext)
-        {
-            if (threadContext->IsInScript()) return;
-            ThreadBoundThreadContextManager::DestroyContextAndEntryForCurrentThread();
-        }
+            JsrtRuntime::Uninitialize();
 
-        JsrtRuntime::Uninitialize();
+            // thread-bound entrypoint should be able to get cleanup correctly, however tlsentry
+            // for current thread might be left behind if this thread was initialized.
+            ThreadContextTLSEntry::CleanupThread();
+            ThreadContextTLSEntry::CleanupProcess();
+        });
+    #endif
 
-        // thread-bound entrypoint should be able to get cleanup correctly, however tlsentry
-        // for current thread might be left behind if this thread was initialized.
-        ThreadContextTLSEntry::CleanupThread();
-        ThreadContextTLSEntry::CleanupProcess();
-    });
-#endif
-
-#ifndef _WIN32
+    #ifndef _WIN32
         PAL_InitializeChakraCore();
-#endif
+    #endif
 
         HMODULE mod = GetModuleHandleW(NULL);
         AutoSystemInfo::SaveModuleFileName(mod);
 
     #if defined(_M_IX86) && !defined(__clang__)
         // Enable SSE2 math functions in CRT if SSE2 is available
-    #pragma prefast(suppress:6031, "We don't require SSE2, but will use it if available")
+        #pragma prefast(suppress:6031, "We don't require SSE2, but will use it if available")
         _set_SSE2_enable(TRUE);
     #endif
 
@@ -178,10 +172,5 @@ void JsrtCallbackState::ObjectBeforeCallectCallbackWrapper(JsObjectBeforeCollect
     #ifdef HEAP_TRACK_ALLOC
         HeapAllocator::InitializeThread();
     #endif
-
-#ifndef _WIN32
-        // put something into key to make sure destructor is going to be called
-        pthread_setspecific(s_threadLocalDummy, malloc(1));
-#endif
     }
-#endif
+#endif  // !defined(_WIN32) || defined(CHAKRA_STATIC_LIBRARY)

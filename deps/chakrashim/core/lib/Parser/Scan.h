@@ -370,7 +370,7 @@ public:
     }
     void Release(void)
     {
-        delete this;
+        HeapDelete(this);
     }
 
     tokens Scan();
@@ -712,7 +712,6 @@ private:
     size_t m_iecpLimTokPrevious;
 
     Scanner(Parser* parser, HashTbl *phtbl, Token *ptoken, ErrHandler *perr, Js::ScriptContext *scriptContext);
-    ~Scanner(void);
 
     template <bool forcePid>
     void SeekAndScan(const RestorePoint& restorePoint);

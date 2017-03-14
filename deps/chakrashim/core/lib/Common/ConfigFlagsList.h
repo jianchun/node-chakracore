@@ -730,7 +730,7 @@ PHASE(All)
 #endif
 
 #define DEFAULT_CONFIG_StrictWriteBarrierCheck  (false)
-#define DEFAULT_CONFIG_KeepRecyclerTrackData  (true)
+#define DEFAULT_CONFIG_KeepRecyclerTrackData  (false)
 #define DEFAULT_CONFIG_EnableBGFreeZero (true)
 
 #if !GLOBAL_ENABLE_WRITE_BARRIER
@@ -1303,7 +1303,7 @@ FLAGNR(Boolean, LibraryStackFrameDebugger   , "Assume debugger support for libra
 FLAGNR(Boolean, RecyclerStress        , "Stress the recycler by collect on every allocation call", false)
 #if ENABLE_CONCURRENT_GC
 FLAGNR(Boolean, RecyclerBackgroundStress        , "Stress the recycler by collect in the background thread on every allocation call", false)
-FLAGNR(Boolean, RecyclerConcurrentStress        , "Stress the concurrent recycler by concurrent collect on every allocation call", true)
+FLAGNR(Boolean, RecyclerConcurrentStress        , "Stress the concurrent recycler by concurrent collect on every allocation call", false)
 FLAGNR(Boolean, RecyclerConcurrentRepeatStress  , "Stress the concurrent recycler by concurrent collect on every allocation call and repeat mark and rescan in the background thread", false)
 #endif
 #if ENABLE_PARTIAL_GC

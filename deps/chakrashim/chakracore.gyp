@@ -12,7 +12,7 @@
     'chakra_libs_absolute%': '',
 
     # xplat (non-win32) only
-    'chakra_config': 'Release',     # Debug, Release
+    'chakra_config': 'Debug',     # Debug, Release
 
     'conditions': [
       ['target_arch=="ia32"', { 'Platform': 'x86' }],
@@ -49,7 +49,7 @@
             ],
         }]
       ],
-        
+
       'variables': {
         'chakracore_header': [
           '<(chakra_dir)/lib/Common/ChakraCoreVersion.h',
@@ -123,6 +123,7 @@
                 '<(chakra_dir)/build.sh',
                 '--without=Simdjs',
                 '--static',
+                '-j=6',
                 '<@(chakra_build_flags)',
                 '<@(icu_args)',
                 '--libs-only'
